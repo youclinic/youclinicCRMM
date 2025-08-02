@@ -233,9 +233,9 @@ export function AdminTab() {
                 <div>On Follow-up: {stats.on_follow_up} ({stats.total > 0 ? ((stats.on_follow_up / stats.total) * 100).toFixed(1) : "0.0"}%)</div>
                 <div>Live: {stats.live} ({stats.total > 0 ? ((stats.live / stats.total) * 100).toFixed(1) : "0.0"}%)</div>
                 <div>Passive Live: {stats.passive_live} ({stats.total > 0 ? ((stats.passive_live / stats.total) * 100).toFixed(1) : "0.0"}%)</div>
-                <div>Cold: {stats.cold} ({stats.total > 0 ? ((stats.cold / stats.total) * 100).toFixed(1) : "0.0"}%)</div>
+                <div>Cold - GBTU: {stats.cold} ({stats.total > 0 ? ((stats.cold / stats.total) * 100).toFixed(1) : "0.0"}%)</div>
                 <div>Hot: {stats.hot} ({stats.total > 0 ? ((stats.hot / stats.total) * 100).toFixed(1) : "0.0"}%)</div>
-                <div>Dead: {stats.dead} ({stats.total > 0 ? ((stats.dead / stats.total) * 100).toFixed(1) : "0.0"}%)</div>
+                <div>EWS: {stats.dead} ({stats.total > 0 ? ((stats.dead / stats.total) * 100).toFixed(1) : "0.0"}%)</div>
                 <div>No Communication: {stats.no_communication} ({stats.total > 0 ? ((stats.no_communication / stats.total) * 100).toFixed(1) : "0.0"}%)</div>
                 <div>No interest: {stats.no_interest} ({stats.total > 0 ? ((stats.no_interest / stats.total) * 100).toFixed(1) : "0.0"}%)</div>
                 <div>Sold: {stats.sold} ({stats.total > 0 ? ((stats.sold / stats.total) * 100).toFixed(1) : "0.0"}%)</div>

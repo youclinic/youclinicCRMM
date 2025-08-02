@@ -349,9 +349,9 @@ export const getStats = query({
       on_follow_up: leads.filter(l => l.status === "on_follow_up").length,
       live: leads.filter(l => l.status === "live").length,
       passive_live: leads.filter(l => l.status === "passive_live").length,
-      cold: leads.filter(l => l.status === "cold").length,
+      cold: leads.filter(l => l.status === "cold").length, // Cold - GBTU
       hot: leads.filter(l => l.status === "hot").length,
-      dead: leads.filter(l => l.status === "dead").length,
+      dead: leads.filter(l => l.status === "dead").length, // EWS
       no_communication: leads.filter(l => l.status === "no_communication").length,
       no_interest: leads.filter(l => l.status === "no_interest").length,
       sold: leads.filter(l => l.status === "sold").length,
@@ -422,9 +422,9 @@ export const getStatsForUser = query({
       on_follow_up: leads.filter(l => l.status === "on_follow_up").length,
       live: leads.filter(l => l.status === "live").length,
       passive_live: leads.filter(l => l.status === "passive_live").length,
-      cold: leads.filter(l => l.status === "cold").length,
+      cold: leads.filter(l => l.status === "cold").length, // Cold - GBTU
       hot: leads.filter(l => l.status === "hot").length,
-      dead: leads.filter(l => l.status === "dead").length,
+      dead: leads.filter(l => l.status === "dead").length, // EWS
       no_communication: leads.filter(l => l.status === "no_communication").length,
       no_interest: leads.filter(l => l.status === "no_interest").length,
       sold: leads.filter(l => l.status === "sold").length,

@@ -16,6 +16,8 @@ export function SoldsTab() {
   // Filter states
   const [treatmentFilter, setTreatmentFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string>("current_month");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
   
   const treatmentTypes = [
     "Parkinson's",
@@ -41,6 +43,19 @@ export function SoldsTab() {
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
     return { start: startOfLastMonth, end: endOfLastMonth };
+  };
+
+  // Handle date filter change
+  const handleDateFilterChange = (value: string) => {
+    setDateFilter(value);
+    if (value === "custom") {
+      // Set default custom dates to current month if switching to custom
+      if (!customStartDate || !customEndDate) {
+        const { start, end } = getCurrentMonthDates();
+        setCustomStartDate(start.toISOString().split('T')[0]);
+        setCustomEndDate(end.toISOString().split('T')[0]);
+      }
+    }
   };
 
   // Filter patients based on date filter
@@ -69,11 +84,19 @@ export function SoldsTab() {
         const saleDate = new Date(lead.saleDate);
         return saleDate >= start && saleDate <= end;
       });
+    } else if (dateFilter === "custom" && customStartDate && customEndDate) {
+      const start = new Date(customStartDate);
+      const end = new Date(customEndDate);
+      filtered = filtered.filter(lead => {
+        if (!lead.saleDate) return false;
+        const saleDate = new Date(lead.saleDate);
+        return saleDate >= start && saleDate <= end;
+      });
     }
     // "all_time" shows all patients
     
     return filtered;
-  }, [convertedPatients, treatmentFilter, dateFilter]);
+  }, [convertedPatients, treatmentFilter, dateFilter, customStartDate, customEndDate]);
 
   // Calculate total price
   const totalPrice = useMemo(() => {
@@ -154,12 +177,37 @@ export function SoldsTab() {
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">Date Range</label>
-          <select value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="px-2 py-1 border rounded">
+          <select value={dateFilter} onChange={e => handleDateFilterChange(e.target.value)} className="px-2 py-1 border rounded">
             <option value="current_month">Current Month</option>
             <option value="last_month">Last Month</option>
+            <option value="custom">Custom Range</option>
             <option value="all_time">All Time</option>
           </select>
         </div>
+        
+        {/* Custom date inputs */}
+        {dateFilter === "custom" && (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={e => setCustomStartDate(e.target.value)}
+                className="px-2 py-1 border rounded"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">End Date</label>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={e => setCustomEndDate(e.target.value)}
+                className="px-2 py-1 border rounded"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Solds Table */}

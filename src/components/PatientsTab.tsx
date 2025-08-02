@@ -507,9 +507,9 @@ export function PatientsTab() {
             <option value="on_follow_up">On Follow-up</option>
             <option value="live">Live</option>
             <option value="passive_live">Passive Live</option>
-            <option value="cold">Cold</option>
+            <option value="cold">Cold - GBTU</option>
             <option value="hot">Hot</option>
-            <option value="dead">Dead</option>
+            <option value="dead">EWS</option>
             <option value="no_communication">No Communication</option>
             <option value="no_interest">No interest</option>
             <option value="sold">Sold</option>
@@ -686,9 +686,9 @@ export function PatientsTab() {
                       <option value="on_follow_up">On Follow-up</option>
                       <option value="live">Live</option>
                       <option value="passive_live">Passive Live</option>
-                      <option value="cold">Cold</option>
+                      <option value="cold">Cold - GBTU</option>
                       <option value="hot">Hot</option>
-                      <option value="dead">Dead</option>
+                      <option value="dead">EWS</option>
                       <option value="no_communication">No Communication</option>
                       <option value="no_interest">No interest</option>
                       <option value="sold">Sold</option>
