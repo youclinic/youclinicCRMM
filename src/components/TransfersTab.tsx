@@ -48,15 +48,27 @@ export function TransfersTab() {
   }, [notifications, markNotificationRead]);
 
   const handleCreateTransfer = async () => {
-    if (!selectedPatient || !selectedUser) {
-      alert("Lütfen hasta ve kullanıcı seçin");
+    if (!selectedPatient) {
+      alert("Lütfen hasta seçin");
+      return;
+    }
+
+    // "Başkasından bana" seçeneğinde hasta sahibi otomatik olarak kaynak kullanıcı olacak
+    // "Benden başkasına" seçeneğinde hedef kullanıcı seçilmiş olmalı
+    if (transferType === "give" && !selectedUser) {
+      alert("Lütfen hedef kullanıcı seçin");
       return;
     }
 
     try {
+      if (!loggedInUser) {
+        alert("Kullanıcı bilgisi bulunamadı");
+        return;
+      }
+
       await createTransfer({
         patientId: selectedPatient._id,
-        toUserId: selectedUser._id,
+        toUserId: transferType === "give" ? selectedUser._id : loggedInUser._id,
         transferType,
         reason,
         notes,
@@ -259,27 +271,29 @@ export function TransfersTab() {
             </div>
           )}
 
-          {/* Kullanıcı Seçimi */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {transferType === "give" ? "Hedef Kullanıcı" : "Kaynak Kullanıcı"}
-            </label>
-            <select
-              value={selectedUser?._id || ""}
-              onChange={(e) => {
-                const user = salespersons?.find(u => u._id === e.target.value);
-                setSelectedUser(user || null);
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Kullanıcı seçin...</option>
-              {salespersons?.map((user) => (
-                <option key={user._id} value={user._id}>
-                  {user.name || user.email}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Kullanıcı Seçimi - Sadece "Benden başkasına" seçeneğinde göster */}
+          {transferType === "give" && (
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Hedef Kullanıcı
+              </label>
+              <select
+                value={selectedUser?._id || ""}
+                onChange={(e) => {
+                  const user = salespersons?.find(u => u._id === e.target.value);
+                  setSelectedUser(user || null);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Kullanıcı seçin...</option>
+                {salespersons?.map((user) => (
+                  <option key={user._id} value={user._id}>
+                    {user.name || user.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Sebep */}
           <div className="mb-6">
@@ -312,7 +326,7 @@ export function TransfersTab() {
           {/* Gönder Butonu */}
           <button
             onClick={handleCreateTransfer}
-            disabled={!selectedPatient || !selectedUser}
+            disabled={!selectedPatient || (transferType === "give" && !selectedUser)}
             className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             Takas İsteği Oluştur
