@@ -149,9 +149,7 @@ export function LeadsTab() {
     const requiredFields = [
       { key: "firstName", label: "First Name" },
       { key: "lastName", label: "Last Name" },
-      { key: "email", label: "Email" },
       { key: "phone", label: "Phone" },
-      { key: "country", label: "Country" },
       { key: "treatmentType", label: "Treatment Type" },
       { key: "source", label: "Source" },
     ];
