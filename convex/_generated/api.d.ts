@@ -18,6 +18,7 @@ import type * as http from "../http.js";
 import type * as leads from "../leads.js";
 import type * as logs from "../logs.js";
 import type * as router from "../router.js";
+import type * as transfers from "../transfers.js";
 import type * as users from "../users.js";
 
 /**
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   leads: typeof leads;
   logs: typeof logs;
   router: typeof router;
+  transfers: typeof transfers;
   users: typeof users;
 }>;
 export declare const api: FilterApi<

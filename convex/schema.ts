@@ -6,9 +6,9 @@ const applicationTables = {
   leads: defineTable({
     firstName: v.string(),
     lastName: v.string(),
-    email: v.string(),
+    email: v.optional(v.string()),
     phone: v.string(),
-    country: v.string(),
+    country: v.optional(v.string()),
     treatmentType: v.string(),
     budget: v.optional(v.string()),
     status: v.string(), // "new", "contacted", "qualified", "converted", "lost", "treatment_done"
@@ -51,6 +51,36 @@ const applicationTables = {
     role: v.optional(v.string()),
     isAnonymous: v.optional(v.boolean()),
   }).index("by_authId", ["authId"]),
+  patientTransfers: defineTable({
+    patientId: v.id("leads"),
+    fromUserId: v.id("users"),
+    toUserId: v.id("users"),
+    transferType: v.union(v.literal("give"), v.literal("take")), // "give" = benden başkasına, "take" = başkasından bana
+    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
+    reason: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    approvedAt: v.optional(v.number()),
+    approvedBy: v.optional(v.id("users")),
+    rejectedAt: v.optional(v.number()),
+    rejectedBy: v.optional(v.id("users")),
+    rejectionReason: v.optional(v.string()),
+  })
+    .index("by_status", ["status"])
+    .index("by_from_user", ["fromUserId"])
+    .index("by_to_user", ["toUserId"])
+    .index("by_created_at", ["createdAt"]),
+  transferNotifications: defineTable({
+    transferId: v.id("patientTransfers"),
+    userId: v.id("users"),
+    type: v.union(v.literal("request_created"), v.literal("request_approved"), v.literal("request_rejected")),
+    isRead: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_transfer", ["transferId"])
+    .index("by_created_at", ["createdAt"]),
 };
 
 export default defineSchema({

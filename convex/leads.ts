@@ -102,9 +102,9 @@ export const create = mutation({
   args: {
     firstName: v.string(),
     lastName: v.string(),
-    email: v.string(),
+    email: v.optional(v.string()),
     phone: v.string(),
-    country: v.string(),
+    country: v.optional(v.string()),
     treatmentType: v.string(),
     budget: v.optional(v.string()),
     source: v.string(),
@@ -140,6 +140,8 @@ export const create = mutation({
     }
     return await ctx.db.insert("leads", {
       ...args,
+      email: args.email || "",
+      country: args.country || "",
       status: "new",
       assignedTo: userId,
       salesPerson: currentUser.name || currentUser.email, // Use name if available, otherwise email

@@ -11,8 +11,9 @@ import { PatientProfileModal } from "./PatientProfileModal";
 import { Id } from "../../convex/_generated/dataModel";
 import { MarketingTab } from "./MarketingTab";
 import { LogTab } from "./LogTab";
+import { TransfersTab } from "./TransfersTab";
 
-type Tab = "dashboard" | "leads" | "patients" | "solds" | "aftercare" | "admin" | "marketing" | "log";
+type Tab = "dashboard" | "leads" | "patients" | "solds" | "aftercare" | "admin" | "marketing" | "log" | "transfers";
 
 export function CRMDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
@@ -44,6 +45,7 @@ export function CRMDashboard() {
     { id: "patients" as Tab, label: "Patients", icon: "👥" },
     { id: "solds" as Tab, label: "Sold", icon: "💰" },
     { id: "aftercare" as Tab, label: "Aftercare", icon: "🏥" },
+    { id: "transfers" as Tab, label: "Hasta Takas", icon: "🔄" },
     { id: "marketing" as Tab, label: "Marketing", icon: "📈" },
     ...(isAdmin ? [{ id: "admin" as Tab, label: "Admin", icon: "⚙️" }] : []),
     ...(isAdmin ? [{ id: "log" as Tab, label: "Log", icon: "📝" }] : []),
@@ -160,6 +162,7 @@ export function CRMDashboard() {
         {safeActiveTab === "marketing" && <MarketingTab />}
         {safeActiveTab === "admin" && isAdmin && <AdminTab />}
         {safeActiveTab === "log" && isAdmin && <LogTab />}
+        {safeActiveTab === "transfers" && <TransfersTab />}
         {/* Hasta Profil Modalı */}
         {selectedPatientId && (
           <PatientProfileModal patientId={selectedPatientId} onClose={() => setSelectedPatientId(null)} />
