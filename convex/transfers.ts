@@ -240,7 +240,21 @@ export const listTransferRequests = query({
 
       if (patient && fromUser && toUser) {
         result.push({
-          ...transfer,
+          _id: transfer._id,
+          patientId: transfer.patientId,
+          fromUserId: transfer.fromUserId,
+          toUserId: transfer.toUserId,
+          transferType: transfer.transferType,
+          status: transfer.status,
+          reason: transfer.reason,
+          notes: transfer.notes,
+          createdAt: transfer.createdAt,
+          updatedAt: transfer.updatedAt,
+          approvedAt: transfer.approvedAt,
+          approvedBy: transfer.approvedBy,
+          rejectedAt: transfer.rejectedAt,
+          rejectedBy: transfer.rejectedBy,
+          rejectionReason: transfer.rejectionReason,
           patient: {
             firstName: patient.firstName,
             lastName: patient.lastName,
@@ -434,7 +448,11 @@ export const listNotifications = query({
 
       if (transfer && patient && fromUser && toUser) {
         result.push({
-          ...notification,
+          _id: notification._id,
+          transferId: notification.transferId,
+          type: notification.type,
+          isRead: notification.isRead,
+          createdAt: notification.createdAt,
           transfer: {
             patientId: transfer.patientId,
             fromUserId: transfer.fromUserId,
@@ -594,7 +612,21 @@ export const getTransferHistory = query({
 
       if (patient && fromUser && toUser) {
         result.push({
-          ...transfer,
+          _id: transfer._id,
+          patientId: transfer.patientId,
+          fromUserId: transfer.fromUserId,
+          toUserId: transfer.toUserId,
+          transferType: transfer.transferType,
+          status: transfer.status,
+          reason: transfer.reason,
+          notes: transfer.notes,
+          createdAt: transfer.createdAt,
+          updatedAt: transfer.updatedAt,
+          approvedAt: transfer.approvedAt,
+          approvedBy: transfer.approvedBy,
+          rejectedAt: transfer.rejectedAt,
+          rejectedBy: transfer.rejectedBy,
+          rejectionReason: transfer.rejectionReason,
           patient: {
             firstName: patient.firstName,
             lastName: patient.lastName,
