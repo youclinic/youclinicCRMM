@@ -12,7 +12,7 @@ export const searchPatients = query({
     _id: v.id("leads"),
     firstName: v.string(),
     lastName: v.string(),
-    email: v.string(),
+    email: v.optional(v.string()),
     phone: v.string(),
     status: v.string(),
     assignedTo: v.optional(v.id("users")),
@@ -182,7 +182,7 @@ export const listTransferRequests = query({
     patient: v.object({
       firstName: v.string(),
       lastName: v.string(),
-      email: v.string(),
+      email: v.optional(v.string()),
       phone: v.string(),
       status: v.string(),
     }),
@@ -404,7 +404,7 @@ export const listNotifications = query({
     patient: v.object({
       firstName: v.string(),
       lastName: v.string(),
-      email: v.string(),
+      email: v.optional(v.string()),
       phone: v.string(),
     }),
     fromUser: v.object({
@@ -529,7 +529,7 @@ export const getTransferHistory = query({
     patient: v.object({
       firstName: v.string(),
       lastName: v.string(),
-      email: v.string(),
+      email: v.optional(v.string()),
       phone: v.string(),
       status: v.string(),
     }),
