@@ -32,6 +32,7 @@ const applicationTables = {
     consultation3Date: v.optional(v.string()), // Third consultation date
     nextFollowUpDate: v.optional(v.string()), // Sıradaki follow-up tarihi
     followUpCount: v.optional(v.number()), // Kaçıncı follow-up'ta olduğu
+    arrivalDate: v.optional(v.string()), // Türkiye'ye geliş tarihi
     files: v.optional(v.array(v.object({
       fileId: v.id("_storage"),
       fileName: v.string(),
@@ -43,7 +44,8 @@ const applicationTables = {
     .index("by_treatment", ["treatmentType"])
     .index("by_assigned", ["assignedTo"])
     .index("by_salesperson", ["salesPerson"])
-    .index("by_nextFollowUpDate", ["nextFollowUpDate"]),
+    .index("by_nextFollowUpDate", ["nextFollowUpDate"])
+    .index("by_arrivalDate", ["arrivalDate"]),
   users: defineTable({
     name: v.optional(v.string()),
     email: v.optional(v.string()),

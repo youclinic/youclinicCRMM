@@ -60,6 +60,21 @@ export function PatientsTab() {
 
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Check if current user can view sensitive information for a specific lead
+  const canViewSensitiveInfo = (lead: any) => {
+    if (!currentUser) return false;
+    
+    // Admin can view all information
+    if (currentUser.role === "admin") return true;
+    
+    // Salesperson can only view their own lead's sensitive information
+    if (currentUser.role === "salesperson") {
+      return lead.assignedTo === currentUser._id;
+    }
+    
+    return false;
+  };
+
   // Yardımcı fonksiyon: yyyy-MM-dd -> dd/MM/yyyy
   function formatDateTR(dateStr?: string) {
     if (!dateStr) return "";
@@ -192,6 +207,42 @@ export function PatientsTab() {
 
   const FileViewer = ({ leadId }: { leadId: Id<"leads"> }) => {
     const lead = leads?.find(l => l._id === leadId);
+    
+    // Check if current user can view files for this lead
+    const canViewFiles = () => {
+      if (!currentUser || !lead) return false;
+      
+      // Admin can view all files
+      if (currentUser.role === "admin") return true;
+      
+      // Salesperson can only view their own lead's files
+      if (currentUser.role === "salesperson") {
+        return lead.assignedTo === currentUser._id;
+      }
+      
+      return false;
+    };
+    
+    if (!canViewFiles()) {
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-red-600">Access Denied</h2>
+              <button
+                onClick={() => setViewingFiles(null)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-gray-700">
+              You don't have permission to view files for this patient.
+            </p>
+          </div>
+        </div>
+      );
+    }
     
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -677,22 +728,26 @@ export function PatientsTab() {
                     {patient.treatmentType}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <select
-                      value={patient.status}
-                      onChange={(e) => handleStatusChange(patient._id, e.target.value)}
-                      className={`text-xs font-semibold rounded-full px-2 py-1 border-0 bg-gray-100`}
-                    >
-                      <option value="no_whatsapp">No Whatsapp</option>
-                      <option value="on_follow_up">On Follow-up</option>
-                      <option value="live">Live</option>
-                      <option value="passive_live">Passive Live</option>
-                      <option value="cold">Cold - GBTU</option>
-                      <option value="hot">Hot</option>
-                      <option value="dead">EWS</option>
-                      <option value="no_communication">No Communication</option>
-                      <option value="no_interest">No interest</option>
-                      <option value="sold">Sold</option>
-                    </select>
+                    {canViewSensitiveInfo(patient) ? (
+                      <select
+                        value={patient.status}
+                        onChange={(e) => handleStatusChange(patient._id, e.target.value)}
+                        className={`text-xs font-semibold rounded-full px-2 py-1 border-0 bg-gray-100`}
+                      >
+                        <option value="no_whatsapp">No Whatsapp</option>
+                        <option value="on_follow_up">On Follow-up</option>
+                        <option value="live">Live</option>
+                        <option value="passive_live">Passive Live</option>
+                        <option value="cold">Cold - GBTU</option>
+                        <option value="hot">Hot</option>
+                        <option value="dead">EWS</option>
+                        <option value="no_communication">No Communication</option>
+                        <option value="no_interest">No interest</option>
+                        <option value="sold">Sold</option>
+                      </select>
+                    ) : (
+                      <span className="text-sm text-gray-500">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap flex flex-col items-start gap-1">
                     <div className="relative w-[150px]">
@@ -739,13 +794,17 @@ export function PatientsTab() {
                     {patient.salesPerson}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <button
-                      onClick={() => setViewingFiles(patient._id)}
-                      className="text-blue-600 hover:text-blue-900 flex items-center space-x-1"
-                    >
-                      <span>📎</span>
-                      <span>{patient.files?.length || 0}</span>
-                    </button>
+                    {canViewSensitiveInfo(patient) ? (
+                      <button
+                        onClick={() => setViewingFiles(patient._id)}
+                        className="text-blue-600 hover:text-blue-900 flex items-center space-x-1"
+                      >
+                        <span>📎</span>
+                        <span>{patient.files?.length || 0}</span>
+                      </button>
+                    ) : (
+                      <span className="text-sm text-gray-500">-</span>
+                    )}
                   </td>
                   {currentUser?.role === "admin" && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

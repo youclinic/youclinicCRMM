@@ -18,6 +18,7 @@ type Tab = "dashboard" | "leads" | "patients" | "solds" | "aftercare" | "admin" 
 export function CRMDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const loggedInUser = useQuery(api.auth.loggedInUser);
+  const newLeadsCount = useQuery(api.leads.getNewLeadsCount);
   const logLogin = useMutation(api.logs.logLogin);
   const logTabVisit = useMutation(api.logs.logTabVisit);
   const loginLoggedRef = useRef(false);
@@ -139,7 +140,7 @@ export function CRMDashboard() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center space-x-3 px-6 py-3 text-left hover:bg-gray-50 transition-colors ${
+              className={`w-full flex items-center space-x-3 px-6 py-3 text-left hover:bg-gray-50 transition-colors relative ${
                 safeActiveTab === tab.id
                   ? "bg-blue-50 border-r-2 border-blue-600 text-blue-600"
                   : "text-gray-700"
@@ -147,6 +148,11 @@ export function CRMDashboard() {
             >
               <span className="text-xl">{tab.icon}</span>
               <span className="font-medium">{tab.label}</span>
+              {tab.id === "leads" && typeof newLeadsCount === "number" && newLeadsCount >= 1 && (
+                <span className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center min-w-[20px]">
+                  {newLeadsCount > 99 ? "99+" : newLeadsCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>

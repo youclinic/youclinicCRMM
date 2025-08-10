@@ -13,9 +13,12 @@
   },
   "dependencies": {
     "@convex-dev/auth": "^0.0.80",
+    "@google-cloud/local-auth": "^3.0.1",
     "clsx": "^2.1.1",
     "convex": "^1.25.0",
     "date-fns": "^4.1.0",
+    "googleapis": "^155.0.1",
+    "lucide-react": "^0.539.0",
     "react": "^19.0.0",
     "react-datepicker": "^8.4.0",
     "react-dom": "^19.0.0",

@@ -178,6 +178,7 @@ export const update = mutation({
     consultation3Date: v.optional(v.string()),
     nextFollowUpDate: v.optional(v.string()),
     followUpCount: v.optional(v.number()),
+    arrivalDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -192,11 +193,21 @@ export const update = mutation({
     let logStatusChange = false;
     let oldStatus = undefined;
     let newStatus = undefined;
+    
+    // Check if status is being changed to "on_follow_up"
     if (lead && updates.status && updates.status !== lead.status) {
       logStatusChange = true;
       oldStatus = lead.status;
       newStatus = updates.status;
+      
+      // If status is being set to "on_follow_up", automatically set nextFollowUpDate to tomorrow
+      if (updates.status === "on_follow_up") {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        updates.nextFollowUpDate = tomorrow.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      }
     }
+    
     const result = await ctx.db.patch(id, updates);
     // Log status update if needed
     if (logStatusChange && user) {
@@ -430,5 +441,180 @@ export const getStatsForUser = query({
       sold: leads.filter(l => l.status === "sold").length,
     };
     return stats;
+  },
+});
+
+// Dashboard için consultation tarihlerini de içeren lead listesi
+export const getDashboardLeads = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Fetch user document to check role
+    const userDoc = await ctx.db.get(userId);
+    if (!userDoc) throw new Error("User not found");
+
+    let leads;
+    if (userDoc.role === "admin") {
+      // Admins see all leads
+      leads = await ctx.db.query("leads").order("desc").collect();
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons see only their assigned leads
+      leads = await ctx.db
+        .query("leads")
+        .filter(q => q.eq(q.field("assignedTo"), userId))
+        .order("desc")
+        .collect();
+    } else {
+      throw new Error("Invalid user role");
+    }
+
+    return leads;
+  },
+});
+
+// Upcoming hastaları getir (arrival date'i olan sold hastaları)
+export const getUpcomingPatients = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Fetch user document to check role
+    const userDoc = await ctx.db.get(userId);
+    if (!userDoc) throw new Error("User not found");
+
+    let leads;
+    if (userDoc.role === "admin") {
+      // Admins see all upcoming patients
+      leads = await ctx.db.query("leads")
+        .withIndex("by_arrivalDate")
+        .filter(q => q.and(
+          q.eq(q.field("status"), "sold"),
+          q.neq(q.field("arrivalDate"), undefined)
+        ))
+        .order("asc")
+        .collect();
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons see only their assigned upcoming patients
+      leads = await ctx.db.query("leads")
+        .withIndex("by_arrivalDate")
+        .filter(q => q.and(
+          q.eq(q.field("status"), "sold"),
+          q.neq(q.field("arrivalDate"), undefined),
+          q.eq(q.field("assignedTo"), userId)
+        ))
+        .order("asc")
+        .collect();
+    } else {
+      throw new Error("Invalid user role");
+    }
+
+    return leads;
+  },
+});
+
+// Admin için: Bu ay gelecek hastaların toplam cirosu
+export const getMonthlyRevenue = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const userDoc = await ctx.db.get(userId);
+    if (!userDoc || userDoc.role !== "admin") {
+      throw new Error("Only admins can view monthly revenue");
+    }
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // Bu ay gelecek hastaları getir
+    const upcomingPatients = await ctx.db.query("leads")
+      .withIndex("by_arrivalDate")
+      .filter(q => q.and(
+        q.eq(q.field("status"), "sold"),
+        q.neq(q.field("arrivalDate"), undefined)
+      ))
+      .collect();
+
+    // Bu ay gelecek hastaları filtrele
+    const thisMonthPatients = upcomingPatients.filter(patient => {
+      if (!patient.arrivalDate) return false;
+      
+      const arrivalDate = new Date(patient.arrivalDate);
+      const patientMonth = arrivalDate.getMonth();
+      const patientYear = arrivalDate.getFullYear();
+      
+      return patientMonth === currentMonth && patientYear === currentYear;
+    });
+
+    // Para birimlerine göre grupla ve toplam hesapla
+    const revenueByCurrency: { [currency: string]: number } = {};
+    
+    thisMonthPatients.forEach(patient => {
+      const currency = patient.currency || "USD";
+      const price = patient.price || 0;
+      
+      if (!revenueByCurrency[currency]) {
+        revenueByCurrency[currency] = 0;
+      }
+      revenueByCurrency[currency] += price;
+    });
+
+    return {
+      revenueByCurrency,
+      patientCount: thisMonthPatients.length,
+      patients: thisMonthPatients.map(patient => ({
+        _id: patient._id,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        arrivalDate: patient.arrivalDate,
+        price: patient.price || 0,
+        currency: patient.currency || "USD"
+      }))
+    };
+  },
+});
+
+export const getNewLeadsCount = query({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Fetch user document to check role
+    const userDoc = await ctx.db.get(userId);
+    if (!userDoc) {
+      throw new Error("User not found");
+    }
+
+    let leads;
+    if (userDoc.role === "admin") {
+      // Admins see all leads
+      leads = await ctx.db.query("leads").collect();
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons see only their assigned leads
+      leads = await ctx.db.query("leads")
+        .filter(q => q.eq(q.field("assignedTo"), userId))
+        .collect();
+    } else {
+      throw new Error("Invalid user role");
+    }
+
+    // Filter for new leads (checking both "new" and "new_lead" statuses)
+    const newLeads = leads.filter(lead => lead.status === "new" || lead.status === "new_lead");
+    return newLeads.length;
   },
 });

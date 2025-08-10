@@ -4,7 +4,7 @@ import { Id } from "../../convex/_generated/dataModel";
 
 export function DashboardTab() {
   const stats = useQuery(api.leads.getStats);
-  const recentLeads = useQuery(api.leads.list);
+  const recentLeads = useQuery(api.leads.getDashboardLeads);
 
   if (stats === undefined || recentLeads === undefined) {
     return (
@@ -63,9 +63,9 @@ export function DashboardTab() {
         ))}
       </div>
 
-      {/* Calendar Section (replaces Recent Leads) */}
+      {/* Calendar Section */}
       <div className="bg-white rounded-lg shadow p-6 mt-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Follow-up Calendar</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Calendar</h2>
         <TenDayFollowUpCalendar leads={recentLeads} />
       </div>
     </div>
@@ -77,6 +77,9 @@ interface Lead {
   firstName: string;
   lastName: string;
   nextFollowUpDate?: string;
+  consultation1Date?: string;
+  consultation2Date?: string;
+  consultation3Date?: string;
 }
 
 function TenDayFollowUpCalendar({ leads }: { leads: Lead[] }) {
@@ -96,24 +99,114 @@ function TenDayFollowUpCalendar({ leads }: { leads: Lead[] }) {
   }
   // Ay adını Türkçe göster
   const monthName = days[0].date.toLocaleString('tr-TR', { month: 'long', year: 'numeric' });
+  
   // Her gün için isimleri bul
-  const followUpMap: Record<string, string[]> = {};
+  const followUpMap: Record<string, Array<{name: string, type: 'followup' | 'consultation1' | 'consultation2' | 'consultation3'}>> = {};
+  
   for (const lead of leads) {
+    // Follow-up tarihleri
     if (lead.nextFollowUpDate) {
       if (!followUpMap[lead.nextFollowUpDate]) followUpMap[lead.nextFollowUpDate] = [];
-      followUpMap[lead.nextFollowUpDate].push(`${lead.firstName} ${lead.lastName}`);
+      followUpMap[lead.nextFollowUpDate].push({
+        name: `${lead.firstName} ${lead.lastName}`,
+        type: 'followup'
+      });
+    }
+    
+    // Consultation tarihleri
+    if (lead.consultation1Date) {
+      if (!followUpMap[lead.consultation1Date]) followUpMap[lead.consultation1Date] = [];
+      followUpMap[lead.consultation1Date].push({
+        name: `${lead.firstName} ${lead.lastName}`,
+        type: 'consultation1'
+      });
+    }
+    
+    if (lead.consultation2Date) {
+      if (!followUpMap[lead.consultation2Date]) followUpMap[lead.consultation2Date] = [];
+      followUpMap[lead.consultation2Date].push({
+        name: `${lead.firstName} ${lead.lastName}`,
+        type: 'consultation2'
+      });
+    }
+    
+    if (lead.consultation3Date) {
+      if (!followUpMap[lead.consultation3Date]) followUpMap[lead.consultation3Date] = [];
+      followUpMap[lead.consultation3Date].push({
+        name: `${lead.firstName} ${lead.lastName}`,
+        type: 'consultation3'
+      });
     }
   }
+  
+  const getEventColor = (type: 'followup' | 'consultation1' | 'consultation2' | 'consultation3') => {
+    switch (type) {
+      case 'followup':
+        return 'bg-blue-100 text-blue-800';
+      case 'consultation1':
+        return 'bg-green-100 text-green-800';
+      case 'consultation2':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'consultation3':
+        return 'bg-purple-100 text-purple-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+  
+  const getEventLabel = (type: 'followup' | 'consultation1' | 'consultation2' | 'consultation3') => {
+    switch (type) {
+      case 'followup':
+        return 'Follow-up';
+      case 'consultation1':
+        return 'Consultation 1';
+      case 'consultation2':
+        return 'Consultation 2';
+      case 'consultation3':
+        return 'Consultation 3';
+      default:
+        return '';
+    }
+  };
+  
   return (
     <div>
       <div className="text-center text-xl font-bold mb-2 uppercase tracking-wide">{monthName}</div>
+      
+      {/* Legend */}
+      <div className="flex flex-wrap gap-2 mb-4 justify-center">
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded"></div>
+          <span className="text-xs text-gray-600">Follow-up</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
+          <span className="text-xs text-gray-600">Consultation 1</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></div>
+          <span className="text-xs text-gray-600">Consultation 2</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 bg-purple-100 border border-purple-300 rounded"></div>
+          <span className="text-xs text-gray-600">Consultation 3</span>
+        </div>
+      </div>
+      
       <div className="grid grid-cols-10 gap-2">
         {days.map((d, idx) => (
           <div key={d.dateStr} className="flex flex-col items-center border rounded-lg p-2 min-h-[80px] bg-white">
             <div className={`mb-2 font-semibold text-gray-700 ${idx === 0 ? 'text-red-600' : ''}`}>{d.day}</div>
             <div className="flex flex-col gap-1 w-full">
-              {(followUpMap[d.dateStr] || []).map((name, i) => (
-                <div key={i} className="bg-blue-100 rounded px-2 py-1 text-xs text-center w-full">{name}</div>
+              {(followUpMap[d.dateStr] || []).map((event, i) => (
+                <div 
+                  key={i} 
+                  className={`rounded px-2 py-1 text-xs text-center w-full ${getEventColor(event.type)}`}
+                  title={`${event.name} - ${getEventLabel(event.type)}`}
+                >
+                  <div className="font-medium">{event.name}</div>
+                  <div className="text-xs opacity-75">{getEventLabel(event.type)}</div>
+                </div>
               ))}
             </div>
           </div>

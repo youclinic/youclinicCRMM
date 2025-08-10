@@ -268,6 +268,42 @@ export function LeadsTab() {
   const FileViewer = ({ leadId }: { leadId: Id<"leads"> }) => {
     const lead = leads?.find(l => l._id === leadId);
     
+    // Check if current user can view files for this lead
+    const canViewFiles = () => {
+      if (!currentUser || !lead) return false;
+      
+      // Admin can view all files
+      if (currentUser.role === "admin") return true;
+      
+      // Salesperson can only view their own lead's files
+      if (currentUser.role === "salesperson") {
+        return lead.assignedTo === currentUser._id;
+      }
+      
+      return false;
+    };
+    
+    if (!canViewFiles()) {
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-red-600">Access Denied</h2>
+              <button
+                onClick={() => setViewingFiles(null)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-gray-700">
+              You don't have permission to view files for this patient.
+            </p>
+          </div>
+        </div>
+      );
+    }
+    
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -376,6 +412,21 @@ export function LeadsTab() {
   // Filter leads to only show those with status 'new'
   let filteredLeads = leads;
   const activeLeads = filteredLeads.filter(lead => lead.status === "new");
+
+  // Check if current user can view sensitive information for a specific lead
+  const canViewSensitiveInfo = (lead: any) => {
+    if (!currentUser) return false;
+    
+    // Admin can view all information
+    if (currentUser.role === "admin") return true;
+    
+    // Salesperson can only view their own lead's sensitive information
+    if (currentUser.role === "salesperson") {
+      return lead.assignedTo === currentUser._id;
+    }
+    
+    return false;
+  };
 
   return (
     <div className="p-8">
@@ -756,12 +807,16 @@ export function LeadsTab() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Treatment
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Files
-                </th>
+                {currentUser?.role === "admin" && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                )}
+                {currentUser?.role === "admin" && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Files
+                  </th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -782,46 +837,54 @@ export function LeadsTab() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {lead.treatmentType}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <select
-                      value={lead.status}
-                      onChange={(e) => handleStatusChange(lead._id, e.target.value, lead)}
-                      className={`text-xs font-semibold rounded-full px-2 py-1 border-0 bg-gray-100`}
-                    >
-                      <option value="new_lead">New Lead</option>
-                      <option value="no_whatsapp">No Whatsapp</option>
-                      <option value="on_follow_up">On Follow-up</option>
-                      <option value="live">Live</option>
-                      <option value="passive_live">Passive Live</option>
-                      <option value="cold">Cold - GBTU</option>
-                      <option value="hot">Hot</option>
-                      <option value="dead">EWS</option>
-                      <option value="no_communication">No Communication</option>
-                      <option value="no_interest">No interest</option>
-                    </select>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <button
-                      onClick={() => setViewingFiles(lead._id)}
-                      className="text-blue-600 hover:text-blue-900 flex items-center space-x-1"
-                    >
-                      <span>📎</span>
-                      <span>{lead.files?.length || 0}</span>
-                    </button>
-                  </td>
+                  {canViewSensitiveInfo(lead) && (
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <select
+                        value={lead.status}
+                        onChange={(e) => handleStatusChange(lead._id, e.target.value, lead)}
+                        className={`text-xs font-semibold rounded-full px-2 py-1 border-0 bg-gray-100`}
+                      >
+                        <option value="new_lead">New Lead</option>
+                        <option value="no_whatsapp">No Whatsapp</option>
+                        <option value="on_follow_up">On Follow-up</option>
+                        <option value="live">Live</option>
+                        <option value="passive_live">Passive Live</option>
+                        <option value="cold">Cold - GBTU</option>
+                        <option value="hot">Hot</option>
+                        <option value="dead">EWS</option>
+                        <option value="no_communication">No Communication</option>
+                        <option value="no_interest">No interest</option>
+                      </select>
+                    </td>
+                  )}
+                  {canViewSensitiveInfo(lead) && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <button
+                        onClick={() => setViewingFiles(lead._id)}
+                        className="text-blue-600 hover:text-blue-900 flex items-center space-x-1"
+                      >
+                        <span>📎</span>
+                        <span>{lead.files?.length || 0}</span>
+                      </button>
+                    </td>
+                  )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => handleEdit(lead)}
-                      className="text-blue-600 hover:text-blue-900 mr-3"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(lead._id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
+                    {canViewSensitiveInfo(lead) && (
+                      <button
+                        onClick={() => handleEdit(lead)}
+                        className="text-blue-600 hover:text-blue-900 mr-3"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {canViewSensitiveInfo(lead) && (
+                      <button
+                        onClick={() => handleDelete(lead._id)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
