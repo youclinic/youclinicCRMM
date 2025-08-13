@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
@@ -47,6 +47,23 @@ export function PatientsTab() {
   const [followUpEnd, setFollowUpEnd] = useState<Date | null>(null);
   const [followUpDateFilter, setFollowUpDateFilter] = useState<Date | null>(null);
   const [showFollowUpDatePicker, setShowFollowUpDatePicker] = useState(false);
+  const [openDatePickerId, setOpenDatePickerId] = useState<Id<"leads"> | null>(null);
+  
+  // Dışarı tıklandığında takvimi kapat
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.datepicker-container')) {
+        setOpenDatePickerId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const treatmentTypes = [
     "Parkinson's",
     "Autism",
@@ -89,6 +106,19 @@ export function PatientsTab() {
     const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     return dateStr === todayStr;
   }
+
+  // DatePicker için dinamik placement hesaplama
+  const getDatePickerPlacement = () => {
+    const viewportHeight = window.innerHeight;
+    const scrollY = window.scrollY;
+    const tableBottom = document.querySelector('table')?.getBoundingClientRect().bottom || 0;
+    
+    // Eğer tablonun alt kısmı viewport'un alt kısmına yakınsa, takvimi yukarı aç
+    if (tableBottom > viewportHeight - 300) {
+      return "top-start";
+    }
+    return "bottom-start";
+  };
 
   const handleStatusChange = async (id: Id<"leads">, status: string) => {
     if (status === "sold") {
@@ -659,6 +689,8 @@ export function PatientsTab() {
         </div>
       )}
 
+
+
       {/* Patients Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
@@ -750,26 +782,34 @@ export function PatientsTab() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap flex flex-col items-start gap-1">
-                    <div className="relative w-[150px]">
-                      <DatePicker
-                        selected={
-                          patient.nextFollowUpDate && isValid(parse(patient.nextFollowUpDate, 'yyyy-MM-dd', new Date()))
-                            ? parse(patient.nextFollowUpDate, 'yyyy-MM-dd', new Date())
-                            : null
-                        }
-                        onChange={async (date: Date | null) => {
-                          let backendDate = date ? format(date, 'yyyy-MM-dd') : '';
-                          await updateLead({ id: patient._id, nextFollowUpDate: backendDate });
-                          toast.success("Follow-up date updated!");
-                        }}
-                        dateFormat="dd/MM/yyyy"
-                        locale={tr}
-                        placeholderText="gg/aa/yyyy"
-                        className={`pr-4 px-2 py-1 border rounded w-full text-left ${isTodayTR(patient.nextFollowUpDate) ? 'bg-red-100 text-red-700 font-bold' : ''}`}
-                        calendarClassName="!p-2"
-                        showPopperArrow={false}
-                        popperPlacement="bottom"
-                      />
+                    <div className="relative w-[150px] datepicker-container">
+                      <button
+                        onClick={() => setOpenDatePickerId(openDatePickerId === patient._id ? null : patient._id)}
+                        className={`w-full pr-4 px-2 py-1 border rounded text-left ${isTodayTR(patient.nextFollowUpDate) ? 'bg-red-100 text-red-700 font-bold' : 'bg-white'} hover:bg-gray-50`}
+                      >
+                        {patient.nextFollowUpDate ? formatDateTR(patient.nextFollowUpDate) : 'gg/aa/yyyy'}
+                      </button>
+                      {openDatePickerId === patient._id && (
+                        <div className="absolute top-full left-0 z-50 mt-1 bg-white border rounded-lg shadow-lg">
+                          <DatePicker
+                            selected={
+                              patient.nextFollowUpDate && isValid(parse(patient.nextFollowUpDate, 'yyyy-MM-dd', new Date()))
+                                ? parse(patient.nextFollowUpDate, 'yyyy-MM-dd', new Date())
+                                : null
+                            }
+                            onChange={async (date: Date | null) => {
+                              let backendDate = date ? format(date, 'yyyy-MM-dd') : '';
+                              await updateLead({ id: patient._id, nextFollowUpDate: backendDate });
+                              setOpenDatePickerId(null);
+                              toast.success("Follow-up date updated!");
+                            }}
+                            dateFormat="dd/MM/yyyy"
+                            locale={tr}
+                            inline
+                            className="w-full"
+                          />
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 mt-1">
                       <button
