@@ -783,12 +783,26 @@ export function PatientsTab() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap flex flex-col items-start gap-1">
                     <div className="relative w-[150px] datepicker-container">
-                      <button
-                        onClick={() => setOpenDatePickerId(openDatePickerId === patient._id ? null : patient._id)}
-                        className={`w-full pr-4 px-2 py-1 border rounded text-left ${isTodayTR(patient.nextFollowUpDate) ? 'bg-red-100 text-red-700 font-bold' : 'bg-white'} hover:bg-gray-50`}
-                      >
-                        {patient.nextFollowUpDate ? formatDateTR(patient.nextFollowUpDate) : 'gg/aa/yyyy'}
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setOpenDatePickerId(openDatePickerId === patient._id ? null : patient._id)}
+                          className={`flex-1 pr-4 px-2 py-1 border rounded text-left ${isTodayTR(patient.nextFollowUpDate) ? 'bg-red-100 text-red-700 font-bold' : 'bg-white'} hover:bg-gray-50`}
+                        >
+                          {patient.nextFollowUpDate ? formatDateTR(patient.nextFollowUpDate) : 'gg/aa/yyyy'}
+                        </button>
+                        {patient.nextFollowUpDate && (
+                          <button
+                            onClick={async () => {
+                              await updateLead({ id: patient._id, nextFollowUpDate: '' });
+                              toast.success("Follow-up date deleted!");
+                            }}
+                            className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs"
+                            title="Delete follow-up date"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
                       {openDatePickerId === patient._id && (
                         <div className="absolute top-full left-0 z-50 mt-1 bg-white border rounded-lg shadow-lg">
                           <DatePicker
