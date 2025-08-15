@@ -35,7 +35,9 @@ export function SoldsTab() {
     "Dementia",
     "ChromaPulse",
     "Cerebral Palsy",
-    "Stroke"
+    "Stroke",
+    "Ovarian Rejuvenation",
+    "Erectile Dysfunction"
   ];
 
   // Get current month dates

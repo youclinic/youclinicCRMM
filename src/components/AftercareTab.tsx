@@ -23,7 +23,9 @@ export function AftercareTab() {
     "Dementia",
     "ChromaPulse",
     "Cerebral Palsy",
-    "Stroke"
+    "Stroke",
+    "Ovarian Rejuvenation",
+    "Erectile Dysfunction"
   ];
 
   const handleEditConsultations = (patient: any) => {

@@ -60,7 +60,8 @@ export function LeadsTab() {
     "ChromaPulse",
     "Cerebral Palsy",
     "Stroke",
-    "Ovarian Rejuvenation"
+    "Ovarian Rejuvenation",
+    "Erectile Dysfunction"
   ];
 
   const sources = [

@@ -72,7 +72,8 @@ export function PatientsTab() {
     "ChromaPulse",
     "Cerebral Palsy",
     "Stroke",
-    "Ovarian Rejuvenation"
+    "Ovarian Rejuvenation",
+    "Erectile Dysfunction"
   ];
 
   const [searchTerm, setSearchTerm] = useState("");

@@ -49,7 +49,8 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
     "ChromaPulse",
     "Cerebral Palsy",
     "Stroke",
-    "Ovarian Rejuvenation"
+    "Ovarian Rejuvenation",
+    "Erectile Dysfunction"
   ];
   const [editingTreatmentType, setEditingTreatmentType] = useState(false);
   const [treatmentTypeValue, setTreatmentTypeValue] = useState("");
