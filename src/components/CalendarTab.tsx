@@ -32,10 +32,21 @@ export function CalendarTab() {
     priority: "medium" as "low" | "medium" | "high",
   });
 
+  // Pagination state
+  const [paginationOpts, setPaginationOpts] = useState({
+    numItems: 100,
+    cursor: null as string | null,
+  });
+
+  // State to accumulate all loaded events
+  const [allEvents, setAllEvents] = useState<any[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // Queries
-  const events = useQuery(api.calendar.list, {
+  const eventsResult = useQuery(api.calendar.list, {
     startDate: format(startOfMonth(currentDate), "yyyy-MM-dd"),
     endDate: format(endOfMonth(currentDate), "yyyy-MM-dd"),
+    paginationOpts,
   });
   const todayEvents = useQuery(api.calendar.getToday);
   const stats = useQuery(api.calendar.getStats);
@@ -45,6 +56,47 @@ export function CalendarTab() {
   const updateEvent = useMutation(api.calendar.update);
   const markCompleted = useMutation(api.calendar.markCompleted);
   const removeEvent = useMutation(api.calendar.remove);
+
+  // Update allEvents when new data comes in
+  React.useEffect(() => {
+    if (eventsResult?.page) {
+      if (paginationOpts.cursor === null) {
+        // First load - replace all events
+        setAllEvents(eventsResult.page);
+      } else {
+        // Load more - append to existing events
+        setAllEvents(prev => [...prev, ...eventsResult.page]);
+      }
+      // Reset loading state
+      setIsLoadingMore(false);
+    }
+  }, [eventsResult?.page, paginationOpts.cursor]);
+
+  // Pagination handlers
+  const loadMore = () => {
+    if (eventsResult && !eventsResult.isDone && !isLoadingMore) {
+      setIsLoadingMore(true);
+      setPaginationOpts(prev => ({
+        ...prev,
+        cursor: eventsResult.continueCursor,
+      }));
+    }
+  };
+
+  const showAll = () => {
+    setPaginationOpts({
+      numItems: 10000, // Very large number to get all
+      cursor: null,
+    });
+  };
+
+  const resetPagination = () => {
+    setAllEvents([]);
+    setPaginationOpts({
+      numItems: 100,
+      cursor: null,
+    });
+  };
 
   // Takvim günlerini oluştur - Ayın ilk haftasının pazartesi gününden başla
   const firstDayOfMonth = startOfMonth(currentDate);
@@ -69,9 +121,9 @@ export function CalendarTab() {
 
   // Belirli bir gündeki etkinlikleri getir
   const getEventsForDate = (date: Date) => {
-    if (!events) return [];
+    if (!allEvents) return [];
     const dateStr = format(date, "yyyy-MM-dd");
-    return events.filter(event => event.eventDate === dateStr);
+    return allEvents.filter((event: any) => event.eventDate === dateStr);
   };
 
   // Öncelik rengini getir
@@ -263,11 +315,11 @@ export function CalendarTab() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(event.priority)}`}>
-                    {getPriorityIcon(event.priority)}
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(event.priority || "medium")}`}>
+                    {getPriorityIcon(event.priority || "medium")}
                   </span>
                   <button
-                    onClick={() => handleEdit(event)}
+                    onClick={() => handleEdit(event as CalendarEvent)}
                     className="p-1 text-gray-400 hover:text-gray-600"
                   >
                     <Edit className="w-4 h-4" />
@@ -452,6 +504,32 @@ export function CalendarTab() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Pagination for events */}
+      {eventsResult && !eventsResult.isDone && (
+        <div className="mt-6 text-center space-y-2">
+          <button
+            onClick={loadMore}
+            className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+          >
+            load more
+          </button>
+          <div>
+            <button
+              onClick={showAll}
+              className="text-blue-500 hover:text-blue-700 text-sm font-medium transition-colors cursor-pointer"
+            >
+              Show All
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {eventsResult && eventsResult.isDone && allEvents.length > 0 && (
+        <div className="mt-6 text-center">
+          <p className="text-gray-500 text-sm">All events loaded</p>
         </div>
       )}
     </div>

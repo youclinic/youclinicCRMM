@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
+import React from "react";
 
 export function TransfersTab() {
   const [activeSection, setActiveSection] = useState<"create" | "requests" | "history">("create");
@@ -16,25 +17,80 @@ export function TransfersTab() {
   const [selectedTransferId, setSelectedTransferId] = useState<Id<"patientTransfers"> | null>(null);
   const [historyDays, setHistoryDays] = useState(7);
 
+  // Pagination state
+  const [paginationOpts, setPaginationOpts] = useState({
+    numItems: 20,
+    cursor: null as string | null,
+  });
+
+  // State to accumulate all loaded transfer requests
+  const [allTransferRequests, setAllTransferRequests] = useState<any[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const loggedInUser = useQuery(api.auth.loggedInUser);
   const isAdmin = loggedInUser?.role === "admin";
 
   // Queries
   const searchResults = useQuery(
     api.transfers.searchPatients,
-    searchQuery.trim() ? { query: searchQuery, transferType } : "skip"
+    searchQuery.trim() ? { 
+      query: searchQuery, 
+      transferType,
+      paginationOpts: { numItems: 10, cursor: null }
+    } : "skip"
   );
   const salespersons = useQuery(api.users.getSalespersons);
-  const transferRequests = useQuery(api.transfers.listTransferRequests);
+  const transferRequestsResult = useQuery(api.transfers.listTransferRequests, { paginationOpts });
   const transferHistory = useQuery(api.transfers.getTransferHistory, { days: historyDays });
   const notifications = useQuery(api.transfers.listNotifications);
   const unreadCount = useQuery(api.transfers.getUnreadNotificationCount);
+
+  // Update allTransferRequests when new data comes in
+  React.useEffect(() => {
+    if (transferRequestsResult?.page) {
+      if (paginationOpts.cursor === null) {
+        // First load - replace all transfer requests
+        setAllTransferRequests(transferRequestsResult.page);
+      } else {
+        // Load more - append to existing transfer requests
+        setAllTransferRequests(prev => [...prev, ...transferRequestsResult.page]);
+      }
+      // Reset loading state
+      setIsLoadingMore(false);
+    }
+  }, [transferRequestsResult?.page, paginationOpts.cursor]);
 
   // Mutations
   const createTransfer = useMutation(api.transfers.createTransferRequest);
   const approveTransfer = useMutation(api.transfers.approveTransferRequest);
   const rejectTransfer = useMutation(api.transfers.rejectTransferRequest);
   const markNotificationRead = useMutation(api.transfers.markNotificationAsRead);
+
+  // Pagination handlers
+  const loadMore = () => {
+    if (transferRequestsResult && !transferRequestsResult.isDone && !isLoadingMore) {
+      setIsLoadingMore(true);
+      setPaginationOpts(prev => ({
+        ...prev,
+        cursor: transferRequestsResult.continueCursor,
+      }));
+    }
+  };
+
+  const showAll = () => {
+    setPaginationOpts({
+      numItems: 10000, // Very large number to get all
+      cursor: null,
+    });
+  };
+
+  const resetPagination = () => {
+    setAllTransferRequests([]);
+    setPaginationOpts({
+      numItems: 20,
+      cursor: null,
+    });
+  };
 
   // Bildirimleri okundu olarak işaretle
   useEffect(() => {
@@ -53,8 +109,6 @@ export function TransfersTab() {
       return;
     }
 
-    // "Başkasından bana" seçeneğinde hasta sahibi otomatik olarak kaynak kullanıcı olacak
-    // "Benden başkasına" seçeneğinde hedef kullanıcı seçilmiş olmalı
     if (transferType === "give" && !selectedUser) {
       alert("Lütfen hedef kullanıcı seçin");
       return;
@@ -98,23 +152,23 @@ export function TransfersTab() {
 
   const handleRejectTransfer = async () => {
     if (!selectedTransferId) return;
-
+    
     try {
       await rejectTransfer({ 
         transferId: selectedTransferId, 
-        rejectionReason: rejectionReason || undefined 
+        rejectionReason 
       });
+      alert("Takas isteği reddedildi!");
       setShowRejectionModal(false);
       setSelectedTransferId(null);
       setRejectionReason("");
-      alert("Takas isteği reddedildi!");
     } catch (error: any) {
       alert(`Hata: ${error.message}`);
     }
   };
 
   const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString('tr-TR');
+    return new Date(timestamp).toLocaleDateString('tr-TR');
   };
 
   const getStatusColor = (status: string) => {
@@ -135,6 +189,11 @@ export function TransfersTab() {
     }
   };
 
+  // Pending requests count
+  const pendingCount = transferRequestsResult?.page 
+    ? transferRequestsResult.page.filter((r: any) => r.status === "pending").length 
+    : 0;
+
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -144,16 +203,14 @@ export function TransfersTab() {
 
       {/* Bildirim Sayısı */}
       {unreadCount && unreadCount > 0 && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-center">
-            <span className="text-blue-600 font-medium">
-              {unreadCount} yeni bildiriminiz var
-            </span>
-          </div>
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <p className="text-blue-800">
+            <strong>{unreadCount}</strong> okunmamış bildiriminiz var.
+          </p>
         </div>
       )}
 
-      {/* Sekme Navigasyonu */}
+      {/* Tab Navigation */}
       <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
         <button
           onClick={() => setActiveSection("create")}
@@ -163,7 +220,7 @@ export function TransfersTab() {
               : "text-gray-600 hover:text-gray-900"
           }`}
         >
-          Takas İsteği Oluştur
+          Yeni İstek
         </button>
         <button
           onClick={() => setActiveSection("requests")}
@@ -173,9 +230,9 @@ export function TransfersTab() {
               : "text-gray-600 hover:text-gray-900"
           }`}
         >
-          İstekler {transferRequests && transferRequests.filter(r => r.status === "pending").length > 0 && (
+          İstekler {pendingCount > 0 && (
             <span className="ml-1 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-              {transferRequests.filter(r => r.status === "pending").length}
+              {pendingCount}
             </span>
           )}
         </button>
@@ -238,9 +295,9 @@ export function TransfersTab() {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             
-            {searchResults && searchResults.length > 0 && (
+            {searchResults && searchResults.page && searchResults.page.length > 0 && (
               <div className="mt-2 border border-gray-200 rounded-md max-h-60 overflow-y-auto">
-                {searchResults.map((patient) => (
+                {searchResults.page.map((patient: any) => (
                   <div
                     key={patient._id}
                     onClick={() => setSelectedPatient(patient)}
@@ -271,7 +328,7 @@ export function TransfersTab() {
             </div>
           )}
 
-          {/* Kullanıcı Seçimi - Sadece "Benden başkasına" seçeneğinde göster */}
+          {/* Hedef Kullanıcı Seçimi (Sadece "Benden Başkasına" için) */}
           {transferType === "give" && (
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -295,24 +352,23 @@ export function TransfersTab() {
             </div>
           )}
 
-          {/* Sebep */}
+          {/* Sebep ve Notlar */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Sebep
+              Sebep (Opsiyonel)
             </label>
             <input
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Takas sebebini belirtin..."
+              placeholder="Transfer sebebini belirtin..."
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          {/* Notlar */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notlar
+              Notlar (Opsiyonel)
             </label>
             <textarea
               value={notes}
@@ -323,18 +379,16 @@ export function TransfersTab() {
             />
           </div>
 
-          {/* Gönder Butonu */}
           <button
             onClick={handleCreateTransfer}
-            disabled={!selectedPatient || (transferType === "give" && !selectedUser)}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
           >
             Takas İsteği Oluştur
           </button>
         </div>
       )}
 
-      {/* İstekler Listesi */}
+      {/* Takas İstekleri */}
       {activeSection === "requests" && (
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b">
@@ -363,6 +417,9 @@ export function TransfersTab() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Tarih
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Sebep
+                  </th>
                   {isAdmin && (
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       İşlemler
@@ -371,7 +428,7 @@ export function TransfersTab() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {transferRequests?.map((request) => (
+                {allTransferRequests.map((request: any) => (
                   <tr key={request._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -400,6 +457,9 @@ export function TransfersTab() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(request.createdAt)}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {request.reason || "-"}
+                    </td>
                     {isAdmin && request.status === "pending" && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
@@ -423,11 +483,33 @@ export function TransfersTab() {
                     )}
                   </tr>
                 ))}
+                
+                {/* Pagination */}
+                {transferRequestsResult && !transferRequestsResult.isDone && (
+                  <tr>
+                    <td colSpan={isAdmin ? 8 : 7} className="px-6 py-4 text-center space-y-2">
+                      <button
+                        onClick={loadMore}
+                        className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+                      >
+                        load more
+                      </button>
+                      <div>
+                        <button
+                          onClick={showAll}
+                          className="text-blue-500 hover:text-blue-700 text-sm font-medium transition-colors cursor-pointer"
+                        >
+                          Show All
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
           
-          {(!transferRequests || transferRequests.length === 0) && (
+          {(!transferRequestsResult || transferRequestsResult.page.length === 0) && (
             <div className="p-6 text-center text-gray-500">
               Henüz takas isteği bulunmuyor.
             </div>
@@ -482,7 +564,7 @@ export function TransfersTab() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {transferHistory?.map((transfer) => (
+                {transferHistory?.map((transfer: any) => (
                   <tr key={transfer._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -568,4 +650,4 @@ export function TransfersTab() {
       )}
     </div>
   );
-} 
+}

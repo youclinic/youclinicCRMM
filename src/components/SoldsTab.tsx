@@ -6,7 +6,19 @@ import { toast } from "sonner";
 import { PatientProfileModal } from "./PatientProfileModal";
 
 export function SoldsTab() {
-  const convertedPatients = useQuery(api.leads.getConverted);
+  // Pagination state for converted patients
+  const [paginationOpts, setPaginationOpts] = useState({
+    numItems: 1000,
+    cursor: null as string | null,
+  });
+
+  const convertedPatientsResult = useQuery(api.leads.getConverted, { paginationOpts });
+  // Combine sold and converted patients from the result
+  const convertedPatients = convertedPatientsResult ? [
+    ...(convertedPatientsResult.sold || []), 
+    ...(convertedPatientsResult.converted || [])
+  ] : [];
+  
   const upcomingPatients = useQuery(api.leads.getUpcomingPatients);
   const currentUser = useQuery(api.auth.loggedInUser);
   const monthlyRevenue = useQuery(
@@ -19,8 +31,6 @@ export function SoldsTab() {
   const [editValue, setEditValue] = useState<string>("");
   const [showProfileModal, setShowProfileModal] = useState<Id<"leads"> | null>(null);
   const currencyOptions = ["USD", "EUR", "GBP", "TRY"];
-  
-
   
   // Filter states
   const [treatmentFilter, setTreatmentFilter] = useState<string>("");
@@ -77,20 +87,20 @@ export function SoldsTab() {
     
     // Apply treatment filter
     if (treatmentFilter) {
-      filtered = filtered.filter(lead => lead.treatmentType === treatmentFilter);
+      filtered = filtered.filter((lead: any) => lead.treatmentType === treatmentFilter);
     }
     
     // Apply date filter
     if (dateFilter === "current_month") {
       const { start, end } = getCurrentMonthDates();
-      filtered = filtered.filter(lead => {
+      filtered = filtered.filter((lead: any) => {
         if (!lead.saleDate) return false;
         const saleDate = new Date(lead.saleDate);
         return saleDate >= start && saleDate <= end;
       });
     } else if (dateFilter === "last_month") {
       const { start, end } = getLastMonthDates();
-      filtered = filtered.filter(lead => {
+      filtered = filtered.filter((lead: any) => {
         if (!lead.saleDate) return false;
         const saleDate = new Date(lead.saleDate);
         return saleDate >= start && saleDate <= end;
@@ -98,7 +108,7 @@ export function SoldsTab() {
     } else if (dateFilter === "custom" && customStartDate && customEndDate) {
       const start = new Date(customStartDate);
       const end = new Date(customEndDate);
-      filtered = filtered.filter(lead => {
+      filtered = filtered.filter((lead: any) => {
         if (!lead.saleDate) return false;
         const saleDate = new Date(lead.saleDate);
         return saleDate >= start && saleDate <= end;
@@ -113,7 +123,7 @@ export function SoldsTab() {
   const totalPrice = useMemo(() => {
     const totals: { [currency: string]: number } = {};
     
-    filteredPatients.forEach(patient => {
+    filteredPatients.forEach((patient: any) => {
       if (patient.price) {
         const currency = patient.currency || "USD";
         totals[currency] = (totals[currency] || 0) + patient.price;
@@ -156,7 +166,8 @@ export function SoldsTab() {
     }
   };
 
-  if (convertedPatients === undefined) {
+  // Loading state
+  if (convertedPatientsResult === undefined) {
     return (
       <div className="p-8">
         <div className="animate-pulse">

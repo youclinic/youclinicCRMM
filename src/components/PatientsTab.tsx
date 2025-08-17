@@ -8,9 +8,19 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { tr } from "date-fns/locale";
 import { format, parse, isValid, isAfter, isBefore } from "date-fns";
+import React from "react";
 
 export function PatientsTab() {
-  const leads = useQuery(api.leads.list);
+  const [paginationOpts, setPaginationOpts] = useState({
+    numItems: 20,
+    cursor: null as string | null,
+  });
+
+  // State to accumulate all loaded patients
+  const [allPatients, setAllPatients] = useState<any[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const leadsResult = useQuery(api.leads.getAllPatients, { paginationOpts });
   const currentUser = useQuery(api.auth.loggedInUser);
   const updateLead = useMutation(api.leads.update);
   const deleteLead = useMutation(api.leads.remove);
@@ -49,6 +59,47 @@ export function PatientsTab() {
   const [showFollowUpDatePicker, setShowFollowUpDatePicker] = useState(false);
   const [openDatePickerId, setOpenDatePickerId] = useState<Id<"leads"> | null>(null);
   
+  // Update allPatients when new data comes in
+  React.useEffect(() => {
+    if (leadsResult?.page) {
+      if (paginationOpts.cursor === null) {
+        // First load - replace all patients
+        setAllPatients(leadsResult.page);
+      } else {
+        // Load more - append to existing patients
+        setAllPatients(prev => [...prev, ...leadsResult.page]);
+      }
+      // Reset loading state
+      setIsLoadingMore(false);
+    }
+  }, [leadsResult?.page, paginationOpts.cursor]);
+  
+  // Pagination handlers
+  const loadMore = () => {
+    if (leadsResult && !leadsResult.isDone && !isLoadingMore) {
+      setIsLoadingMore(true);
+      setPaginationOpts(prev => ({
+        ...prev,
+        cursor: leadsResult.continueCursor,
+      }));
+    }
+  };
+
+  const showAll = () => {
+    setPaginationOpts({
+      numItems: 10000, // Very large number to get all
+      cursor: null,
+    });
+  };
+
+  const resetPagination = () => {
+    setAllPatients([]);
+    setPaginationOpts({
+      numItems: 20,
+      cursor: null,
+    });
+  };
+  
   // Dışarı tıklandığında takvimi kapat
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -77,6 +128,32 @@ export function PatientsTab() {
   ];
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Use backend search for patients
+  const searchResults = useQuery(
+    api.leads.searchLeads,
+    searchTerm.trim() ? { query: searchTerm } : "skip"
+  );
+
+  // Use backend filtering for follow-up date
+  const followUpDateResults = useQuery(
+    api.leads.getPatientsByFollowUpDate,
+    followUpDateFilter ? { 
+      followUpDate: format(followUpDateFilter, 'yyyy-MM-dd'),
+      paginationOpts: { numItems: 10000, cursor: null }
+    } : "skip"
+  );
+
+  // Use backend filtering for follow-up date range
+  const followUpDateRangeResults = useQuery(
+    api.leads.getPatientsByFollowUpDateRange,
+    (followUpStart || followUpEnd) ? { 
+      startDate: followUpStart ? format(followUpStart, 'yyyy-MM-dd') : "1900-01-01",
+      endDate: followUpEnd ? format(followUpEnd, 'yyyy-MM-dd') : "2100-12-31",
+      paginationOpts: { numItems: 10000, cursor: null }
+    } : "skip"
+  );
 
   // Check if current user can view sensitive information for a specific lead
   const canViewSensitiveInfo = (lead: any) => {
@@ -237,7 +314,7 @@ export function PatientsTab() {
   };
 
   const FileViewer = ({ leadId }: { leadId: Id<"leads"> }) => {
-    const lead = leads?.find(l => l._id === leadId);
+    const lead = leadsResult?.page?.find((l: any) => l._id === leadId);
     
     // Check if current user can view files for this lead
     const canViewFiles = () => {
@@ -371,7 +448,7 @@ export function PatientsTab() {
     );
   };
 
-  if (leads === undefined) {
+  if (leadsResult === undefined) {
     return (
       <div className="p-8">
         <div className="animate-pulse">
@@ -386,45 +463,44 @@ export function PatientsTab() {
     );
   }
 
-  // Filter patients to show all except 'sold' and 'new_lead'
-  let filteredPatients = leads.filter(lead => lead.status !== "sold" && lead.status !== "new_lead" && lead.status !== "new");
-  if (statusFilter) filteredPatients = filteredPatients.filter(lead => lead.status === statusFilter);
-  if (treatmentFilter) filteredPatients = filteredPatients.filter(lead => lead.treatmentType === treatmentFilter);
-  if (followUpStart || followUpEnd) {
-    filteredPatients = filteredPatients.filter(lead => {
-      if (!lead.createdAt) return false;
-      const leadDate = new Date(lead.createdAt);
-      if (followUpStart && isBefore(leadDate, followUpStart)) return false;
-      if (followUpEnd && isAfter(leadDate, followUpEnd)) return false;
-      return true;
-    });
-  }
-  if (followUpDateFilter) {
-    filteredPatients = filteredPatients.filter(lead => {
-      if (!lead.nextFollowUpDate) return false;
-      const leadDate = parse(lead.nextFollowUpDate, 'yyyy-MM-dd', new Date());
-      return isValid(leadDate) &&
-        format(leadDate, 'yyyy-MM-dd') === format(followUpDateFilter, 'yyyy-MM-dd');
-    });
-  }
+  // Determine which data source to use based on filters
+  let patients: any[] = [];
+  let totalCount = 0;
+  let filterType = "normal";
+
   if (searchTerm.trim() !== "") {
-    const q = searchTerm.trim().toLowerCase();
-    filteredPatients = filteredPatients.filter(lead => {
-      const firstName = lead.firstName?.toLowerCase() || "";
-      const lastName = lead.lastName?.toLowerCase() || "";
-      const fullName = (lead.firstName && lead.lastName) ? (lead.firstName + " " + lead.lastName).toLowerCase() : "";
-      const email = lead.email?.toLowerCase() || "";
-      const phone = lead.phone || "";
-      return (
-        firstName.includes(q) ||
-        lastName.includes(q) ||
-        fullName.includes(q) ||
-        email.includes(q) ||
-        phone.includes(q)
-      );
-    });
+    // Use search results from backend
+    if (searchResults) {
+      patients = searchResults;
+      totalCount = searchResults.length;
+      filterType = "search";
+    }
+  } else if (followUpDateFilter) {
+    // Use follow-up date filter results from backend
+    if (followUpDateResults) {
+      patients = followUpDateResults.page;
+      totalCount = followUpDateResults.page.length;
+      filterType = "followUpDate";
+    }
+  } else if (followUpStart || followUpEnd) {
+    // Use follow-up date range filter results from backend
+    if (followUpDateRangeResults) {
+      patients = followUpDateRangeResults.page;
+      totalCount = followUpDateRangeResults.page.length;
+      filterType = "followUpDateRange";
+    }
+  } else {
+    // Use normal pagination results
+    let filteredPatients = allPatients;
+    
+    // Apply remaining filters (status and treatment type)
+    if (statusFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.status === statusFilter);
+    if (treatmentFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.treatmentType === treatmentFilter);
+    
+    patients = filteredPatients;
+    totalCount = filteredPatients.length;
+    filterType = "normal";
   }
-  const patients = filteredPatients;
 
   return (
     <div className="p-8">
@@ -432,7 +508,12 @@ export function PatientsTab() {
         <h1 className="text-2xl font-bold text-gray-900">Patients Management</h1>
       </div>
 
-      <div className="mb-2 text-sm text-gray-700 font-semibold">Toplam {patients.length} hasta listeleniyor</div>
+             <div className="mb-2 text-sm text-gray-700 font-semibold">
+               {filterType === "search" && `Search results: ${totalCount} patients found`}
+               {filterType === "followUpDate" && `Follow-up date filter: ${totalCount} patients found for ${format(followUpDateFilter!, 'dd/MM/yyyy')}`}
+               {filterType === "followUpDateRange" && `Follow-up date range filter: ${totalCount} patients found`}
+               {filterType === "normal" && `Toplam ${totalCount} hasta listeleniyor`}
+             </div>
 
       {/* Sold Modal */}
       {showConvertModal && (
@@ -881,6 +962,79 @@ export function PatientsTab() {
               ))}
             </tbody>
           </table>
+                     {/* Pagination - Only show when not filtering */}
+           {filterType === "normal" && leadsResult && !leadsResult.isDone && (
+             <div className="mt-6 text-center space-y-2">
+               <button
+                 onClick={loadMore}
+                 className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+               >
+                 load more
+               </button>
+               <div>
+                 <button
+                   onClick={showAll}
+                   className="text-blue-500 hover:text-blue-700 text-sm font-medium transition-colors cursor-pointer"
+                 >
+                   Show All
+                 </button>
+               </div>
+             </div>
+           )}
+           
+           {filterType === "normal" && leadsResult && leadsResult.isDone && patients.length > 0 && (
+             <div className="mt-6 text-center">
+               <p className="text-gray-500 text-sm">All patients loaded</p>
+             </div>
+           )}
+
+           {/* Search results info */}
+           {filterType === "search" && searchResults && (
+             <div className="mt-6 text-center">
+               <p className="text-blue-600 text-sm font-medium">
+                 Found {searchResults.length} patients matching "{searchTerm}"
+               </p>
+               <button
+                 onClick={() => setSearchTerm("")}
+                 className="mt-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+               >
+                 Clear Search
+               </button>
+             </div>
+           )}
+
+           {/* Follow-up date filter results info */}
+           {filterType === "followUpDate" && followUpDateResults && (
+             <div className="mt-6 text-center">
+               <p className="text-green-600 text-sm font-medium">
+                 Found {followUpDateResults.page.length} patients with follow-up on {format(followUpDateFilter!, 'dd/MM/yyyy')}
+               </p>
+               <button
+                 onClick={() => setFollowUpDateFilter(null)}
+                 className="mt-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+               >
+                 Clear Date Filter
+               </button>
+             </div>
+           )}
+
+           {/* Follow-up date range filter results info */}
+           {filterType === "followUpDateRange" && followUpDateRangeResults && (
+             <div className="mt-6 text-center">
+               <p className="text-green-600 text-sm font-medium">
+                 Found {followUpDateRangeResults.page.length} patients with follow-up between {followUpStart && format(followUpStart, 'dd/MM/yyyy')} and {followUpEnd && format(followUpEnd, 'dd/MM/yyyy')}
+               </p>
+               <button
+                 onClick={() => {
+                   setFollowUpStart(null);
+                   setFollowUpEnd(null);
+                 }}
+                 className="mt-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+               >
+                 Clear Date Range Filter
+               </button>
+             </div>
+           )}
           {patients.length === 0 && (
             <div className="text-center py-8">
               <p className="text-gray-500">No patients found.</p>

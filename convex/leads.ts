@@ -1,10 +1,13 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { paginationOptsValidator } from "convex/server";
 
 export const list = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { 
+    paginationOpts: paginationOptsValidator 
+  },
+  handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new Error("Not authenticated");
@@ -15,24 +18,32 @@ export const list = query({
     if (!userDoc) throw new Error("User not found");
 
     if (userDoc.role === "admin") {
-      // Admins see all leads except treatment_done
+      // Admins see only new leads (new and new_lead status)
       return await ctx.db
         .query("leads")
-        .filter(q => q.neq(q.field("status"), "treatment_done"))
+        .filter(q => 
+          q.or(
+            q.eq(q.field("status"), "new"),
+            q.eq(q.field("status"), "new_lead")
+          )
+        )
         .order("desc")
-        .collect();
+        .paginate(args.paginationOpts);
     } else if (userDoc.role === "salesperson") {
-      // Salespersons see only their assigned leads except treatment_done
+      // Salespersons see only their assigned new leads (new and new_lead status)
       return await ctx.db
         .query("leads")
         .filter(q => 
           q.and(
             q.eq(q.field("assignedTo"), userId),
-            q.neq(q.field("status"), "treatment_done")
+            q.or(
+              q.eq(q.field("status"), "new"),
+              q.eq(q.field("status"), "new_lead")
+            )
           )
         )
         .order("desc")
-        .collect();
+        .paginate(args.paginationOpts);
     } else {
       throw new Error("Invalid user role");
     }
@@ -40,8 +51,10 @@ export const list = query({
 });
 
 export const getConverted = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { 
+    paginationOpts: paginationOptsValidator 
+  },
+  handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new Error("Not authenticated");
@@ -49,25 +62,60 @@ export const getConverted = query({
     // Fetch user document to check role
     const userDoc = await ctx.db.get(userId);
     if (!userDoc) throw new Error("User not found");
+    
+    // Get all sold and converted leads in one query
+    let leads;
     if (userDoc.role === "admin") {
       // Admins see all sold and converted leads
-      const sold = await ctx.db.query("leads").withIndex("by_status", q => q.eq("status", "sold")).order("desc").collect();
-      const converted = await ctx.db.query("leads").withIndex("by_status", q => q.eq("status", "converted")).order("desc").collect();
-      return [...sold, ...converted];
+      leads = await ctx.db.query("leads")
+        .withIndex("by_status")
+        .filter(q => 
+          q.or(
+            q.eq(q.field("status"), "sold"),
+            q.eq(q.field("status"), "converted")
+          )
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
     } else if (userDoc.role === "salesperson") {
       // Salespersons see only their assigned sold and converted leads
-      const sold = await ctx.db.query("leads").withIndex("by_status", q => q.eq("status", "sold")).filter(q => q.eq(q.field("assignedTo"), userId)).order("desc").collect();
-      const converted = await ctx.db.query("leads").withIndex("by_status", q => q.eq("status", "converted")).filter(q => q.eq(q.field("assignedTo"), userId)).order("desc").collect();
-      return [...sold, ...converted];
+      leads = await ctx.db.query("leads")
+        .withIndex("by_status")
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.or(
+              q.eq(q.field("status"), "sold"),
+              q.eq(q.field("status"), "converted")
+            )
+          )
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
     } else {
       throw new Error("Invalid user role");
     }
+
+    // Separate sold and converted leads
+    const sold = leads.page.filter(lead => lead.status === "sold");
+    const converted = leads.page.filter(lead => lead.status === "converted");
+
+    return {
+      sold,
+      converted,
+      soldIsDone: leads.isDone,
+      convertedIsDone: leads.isDone,
+      soldContinueCursor: leads.continueCursor,
+      convertedContinueCursor: leads.continueCursor
+    };
   },
 });
 
 export const getTreatmentDone = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { 
+    paginationOpts: paginationOptsValidator 
+  },
+  handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new Error("Not authenticated");
@@ -81,14 +129,14 @@ export const getTreatmentDone = query({
       return await ctx.db.query("leads")
         .withIndex("by_status", (q) => q.eq("status", "treatment_done"))
         .order("desc")
-        .collect();
+        .paginate(args.paginationOpts);
     } else if (userDoc.role === "salesperson") {
       // Salespersons see only their assigned aftercare patients
       return await ctx.db.query("leads")
         .withIndex("by_status", (q) => q.eq("status", "treatment_done"))
         .filter(q => q.eq(q.field("assignedTo"), userId))
         .order("desc")
-        .collect();
+        .paginate(args.paginationOpts);
     } else {
       throw new Error("Invalid user role");
     }
@@ -220,8 +268,8 @@ export const update = mutation({
       
       // If status is being set to "on_follow_up", automatically set nextFollowUpDate to tomorrow
       if (updates.status === "on_follow_up") {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        const today = new Date();
+        const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000); // Add 24 hours in milliseconds
         updates.nextFollowUpDate = tomorrow.toISOString().split('T')[0]; // Format as YYYY-MM-DD
       }
     }
@@ -435,8 +483,17 @@ export const searchLeads = query({
         _id: lead._id,
         firstName: lead.firstName,
         lastName: lead.lastName,
+        email: lead.email,
         phone: lead.phone,
         status: lead.status,
+        treatmentType: lead.treatmentType,
+        country: lead.country,
+        assignedTo: lead.assignedTo,
+        salesPerson: lead.salesPerson,
+        nextFollowUpDate: lead.nextFollowUpDate,
+        followUpCount: lead.followUpCount,
+        files: lead.files,
+        createdAt: lead.createdAt,
       }));
   },
 });
@@ -799,5 +856,206 @@ export const deleteProformaInvoice = mutation({
     }
 
     return await ctx.db.delete(args.invoiceId);
+  },
+});
+
+// Get patients by follow-up date
+export const getPatientsByFollowUpDate = query({
+  args: { 
+    followUpDate: v.string(), // YYYY-MM-DD formatında
+    paginationOpts: paginationOptsValidator 
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Fetch user document to check role
+    const userDoc = await ctx.db.get(userId);
+    if (!userDoc) throw new Error("User not found");
+
+    let patients;
+    if (userDoc.role === "admin") {
+      // Admins see all patients with the specified follow-up date (except new leads)
+      patients = await ctx.db
+        .query("leads")
+        .withIndex("by_nextFollowUpDate", (q) => q.eq("nextFollowUpDate", args.followUpDate))
+        .filter(q => 
+          q.and(
+            q.neq(q.field("status"), "treatment_done"),
+            q.neq(q.field("status"), "new"),
+            q.neq(q.field("status"), "new_lead")
+          )
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons see only their assigned patients with the specified follow-up date (except new leads)
+      patients = await ctx.db
+        .query("leads")
+        .withIndex("by_nextFollowUpDate", (q) => q.eq("nextFollowUpDate", args.followUpDate))
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.neq(q.field("status"), "treatment_done"),
+            q.neq(q.field("status"), "new"),
+            q.neq(q.field("status"), "new_lead")
+          )
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else {
+      throw new Error("Invalid user role");
+    }
+
+    return patients;
+  },
+});
+
+// Get patients by follow-up date range
+export const getPatientsByFollowUpDateRange = query({
+  args: { 
+    startDate: v.string(), // YYYY-MM-DD formatında
+    endDate: v.string(), // YYYY-MM-DD formatında
+    paginationOpts: paginationOptsValidator 
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Fetch user document to check role
+    const userDoc = await ctx.db.get(userId);
+    if (!userDoc) throw new Error("User not found");
+
+    let patients;
+    if (userDoc.role === "admin") {
+      // Admins see all patients in the date range (except new leads)
+      patients = await ctx.db
+        .query("leads")
+        .withIndex("by_nextFollowUpDate")
+        .filter(q => 
+          q.and(
+            q.gte(q.field("nextFollowUpDate"), args.startDate),
+            q.lte(q.field("nextFollowUpDate"), args.endDate),
+            q.neq(q.field("status"), "treatment_done"),
+            q.neq(q.field("status"), "new"),
+            q.neq(q.field("status"), "new_lead")
+          )
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons see only their assigned patients in the date range (except new leads)
+      patients = await ctx.db
+        .query("leads")
+        .withIndex("by_nextFollowUpDate")
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.gte(q.field("nextFollowUpDate"), args.startDate),
+            q.lte(q.field("nextFollowUpDate"), args.endDate),
+            q.neq(q.field("status"), "treatment_done"),
+            q.neq(q.field("status"), "new"),
+            q.neq(q.field("status"), "new_lead")
+          )
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else {
+      throw new Error("Invalid user role");
+    }
+
+    return patients;
+  },
+});
+
+// Get all patients (not just new leads) for Patients tab
+export const getAllPatients = query({
+  args: { 
+    paginationOpts: paginationOptsValidator 
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Fetch user document to check role
+    const userDoc = await ctx.db.get(userId);
+    if (!userDoc) throw new Error("User not found");
+
+    if (userDoc.role === "admin") {
+      // Admins see all patients except new leads and treatment_done
+      return await ctx.db
+        .query("leads")
+        .filter(q => 
+          q.and(
+            q.neq(q.field("status"), "treatment_done"),
+            q.neq(q.field("status"), "new"),
+            q.neq(q.field("status"), "new_lead")
+          )
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons see only their assigned patients except new leads and treatment_done
+      return await ctx.db
+        .query("leads")
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.neq(q.field("status"), "treatment_done"),
+            q.neq(q.field("status"), "new"),
+            q.neq(q.field("status"), "new_lead")
+          )
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else {
+      throw new Error("Invalid user role");
+    }
+  },
+});
+
+// Get all leads for marketing analysis (including new leads)
+export const getAllLeadsForMarketing = query({
+  args: { 
+    paginationOpts: paginationOptsValidator 
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Fetch user document to check role
+    const userDoc = await ctx.db.get(userId);
+    if (!userDoc) throw new Error("User not found");
+
+    if (userDoc.role === "admin") {
+      // Admins see all leads except treatment_done
+      return await ctx.db
+        .query("leads")
+        .filter(q => q.neq(q.field("status"), "treatment_done"))
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons see only their assigned leads except treatment_done
+      return await ctx.db
+        .query("leads")
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.neq(q.field("status"), "treatment_done")
+          )
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else {
+      throw new Error("Invalid user role");
+    }
   },
 });

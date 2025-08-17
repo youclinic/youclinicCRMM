@@ -1,13 +1,16 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { paginationOptsValidator } from "convex/server";
 
 export const listAllLogs = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { 
+    paginationOpts: paginationOptsValidator 
+  },
+  handler: async (ctx, args) => {
     // Return all logs ordered by timestamp descending
     // (ISO string order is lexicographically sortable)
-    const logs = await ctx.db.query("logs").order("desc").collect();
+    const logs = await ctx.db.query("logs").order("desc").paginate(args.paginationOpts);
     return logs;
   },
 });

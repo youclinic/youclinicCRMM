@@ -4,9 +4,19 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { toast } from "sonner";
 import { PatientProfileModal } from "./PatientProfileModal";
+import React from "react"; // Added missing import
 
 export function LeadsTab() {
-  const leads = useQuery(api.leads.list);
+  const [paginationOpts, setPaginationOpts] = useState({
+    numItems: 20,
+    cursor: null as string | null,
+  });
+
+  // State to accumulate all loaded leads
+  const [allLeads, setAllLeads] = useState<any[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const leadsResult = useQuery(api.leads.list, { paginationOpts });
   const currentUser = useQuery(api.auth.loggedInUser);
   const createLead = useMutation(api.leads.create);
   const updateLead = useMutation(api.leads.update);
@@ -76,6 +86,54 @@ export function LeadsTab() {
 
   const currencyOptions = ["USD", "EUR", "GBP"];
 
+  // Update allLeads when new data comes in
+  React.useEffect(() => {
+    if (leadsResult?.page) {
+      if (paginationOpts.cursor === null) {
+        // First load - replace all leads
+        setAllLeads(leadsResult.page);
+      } else {
+        // Load more - append to existing leads
+        setAllLeads(prev => [...prev, ...leadsResult.page]);
+      }
+      // Reset loading state
+      setIsLoadingMore(false);
+    }
+  }, [leadsResult?.page, paginationOpts.cursor]);
+
+  // Initialize allLeads on first load
+  React.useEffect(() => {
+    if (leadsResult?.page && allLeads.length === 0) {
+      setAllLeads(leadsResult.page);
+    }
+  }, [leadsResult?.page, allLeads.length]);
+
+  // Pagination handlers
+  const loadMore = () => {
+    if (leadsResult && !leadsResult.isDone && !isLoadingMore) {
+      setIsLoadingMore(true);
+      setPaginationOpts(prev => ({
+        ...prev,
+        cursor: leadsResult.continueCursor,
+      }));
+    }
+  };
+
+  const showAll = () => {
+    setPaginationOpts({
+      numItems: 1000, // Large number to get most leads
+      cursor: null,
+    });
+  };
+
+  const resetPagination = () => {
+    setAllLeads([]);
+    setPaginationOpts({
+      numItems: 20,
+      cursor: null,
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -85,6 +143,7 @@ export function LeadsTab() {
       } else {
         await createLead(formData);
         toast.success("Lead created successfully!");
+        // Don't reset pagination, let the new lead appear naturally
       }
       resetForm();
     } catch (error) {
@@ -142,11 +201,11 @@ export function LeadsTab() {
   };
 
   const handleStatusChange = async (id: Id<"leads">, status: string, leadObj?: any) => {
-    if (!leads) {
+    if (!leadsResult) {
       toast.error("Lead verisi yüklenemedi. Lütfen sayfayı yenileyin.");
       return;
     }
-    const lead = leadObj || leads.find((l) => l._id === id);
+    const lead = leadObj || leadsResult.page.find((l: any) => l._id === id);
     const requiredFields = [
       { key: "firstName", label: "First Name" },
       { key: "lastName", label: "Last Name" },
@@ -267,7 +326,7 @@ export function LeadsTab() {
   };
 
   const FileViewer = ({ leadId }: { leadId: Id<"leads"> }) => {
-    const lead = leads?.find(l => l._id === leadId);
+    const lead = leadsResult?.page.find((l: any) => l._id === leadId);
     
     // Check if current user can view files for this lead
     const canViewFiles = () => {
@@ -401,7 +460,7 @@ export function LeadsTab() {
     );
   };
 
-  if (leads === undefined) {
+  if (leadsResult === undefined) {
     return (
       <div className="p-8">
         <div className="animate-pulse">
@@ -416,9 +475,8 @@ export function LeadsTab() {
     );
   }
 
-  // Filter leads to only show those with status 'new'
-  let filteredLeads = leads;
-  const activeLeads = filteredLeads.filter(lead => lead.status === "new");
+  // Use allLeads for display, fallback to leadsResult.page if allLeads is empty
+  const activeLeads = allLeads.length > 0 ? allLeads : (leadsResult?.page || []);
 
   // Check if current user can view sensitive information for a specific lead
   const canViewSensitiveInfo = (lead: any) => {
@@ -897,9 +955,42 @@ export function LeadsTab() {
               ))}
             </tbody>
           </table>
-          {activeLeads.length === 0 && (
+          {leadsResult === undefined && (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-500">Loading leads...</p>
+            </div>
+          )}
+          
+          {leadsResult !== undefined && activeLeads.length === 0 && (
             <div className="text-center py-8">
               <p className="text-gray-500">No leads found. Add your first lead to get started!</p>
+            </div>
+          )}
+          
+          {/* Pagination */}
+          {leadsResult !== undefined && !leadsResult.isDone && (
+            <div className="mt-6 text-center space-y-2">
+              <button
+                onClick={loadMore}
+                className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+              >
+                load more
+              </button>
+              <div>
+                <button
+                  onClick={showAll}
+                  className="text-blue-500 hover:text-blue-700 text-sm font-medium transition-colors cursor-pointer"
+                >
+                  Show All
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {leadsResult !== undefined && leadsResult.isDone && activeLeads.length > 0 && (
+            <div className="mt-6 text-center">
+              <p className="text-gray-500 text-sm">All leads loaded</p>
             </div>
           )}
         </div>

@@ -1,23 +1,29 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { paginationOptsValidator } from "convex/server";
 
 // Hasta arama fonksiyonu
 export const searchPatients = query({
   args: { 
     query: v.string(),
-    transferType: v.union(v.literal("give"), v.literal("take"))
+    transferType: v.union(v.literal("give"), v.literal("take")),
+    paginationOpts: paginationOptsValidator,
   },
-  returns: v.array(v.object({
-    _id: v.id("leads"),
-    firstName: v.string(),
-    lastName: v.string(),
-    email: v.optional(v.string()),
-    phone: v.string(),
-    status: v.string(),
-    assignedTo: v.optional(v.id("users")),
-    salesPerson: v.optional(v.string()),
-  })),
+  returns: v.object({
+    page: v.array(v.object({
+      _id: v.id("leads"),
+      firstName: v.string(),
+      lastName: v.string(),
+      email: v.optional(v.string()),
+      phone: v.string(),
+      status: v.string(),
+      assignedTo: v.optional(v.id("users")),
+      salesPerson: v.optional(v.string()),
+    })),
+    isDone: v.boolean(),
+    continueCursor: v.union(v.string(), v.null()),
+  }),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
@@ -26,26 +32,26 @@ export const searchPatients = query({
     if (!userDoc) throw new Error("User not found");
 
     const q = args.query.trim().toLowerCase();
-    if (!q) return [];
+    if (!q) return { page: [], isDone: true, continueCursor: null };
 
     let leads;
     if (args.transferType === "give") {
       // Benden başkasına: Sadece kendi hastalarımı göster
       leads = await ctx.db.query("leads")
         .filter(q => q.eq(q.field("assignedTo"), userId))
-        .collect();
+        .paginate(args.paginationOpts);
     } else {
       // Başkasından bana: Başkalarının hastalarını göster
       leads = await ctx.db.query("leads")
         .filter(q => q.neq(q.field("assignedTo"), userId))
-        .collect();
+        .paginate(args.paginationOpts);
     }
 
     // Normalize fonksiyonu
     const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ\s]/gi, "").replace(/\s+/g, "");
     const normalizedQ = normalize(q);
 
-    return leads
+    const filteredLeads = leads.page
       .filter(lead => {
         const firstName = lead.firstName ? normalize(lead.firstName) : "";
         const lastName = lead.lastName ? normalize(lead.lastName) : "";
@@ -72,6 +78,12 @@ export const searchPatients = query({
         assignedTo: lead.assignedTo,
         salesPerson: lead.salesPerson,
       }));
+
+    return {
+      page: filteredLeads,
+      isDone: leads.isDone,
+      continueCursor: leads.continueCursor,
+    };
   },
 });
 
@@ -159,51 +171,12 @@ export const createTransferRequest = mutation({
   },
 });
 
-// Takas isteklerini listele (kullanıcıya göre)
+// Takas isteklerini listele
 export const listTransferRequests = query({
-  args: {},
-  returns: v.array(v.object({
-    _id: v.id("patientTransfers"),
-    patientId: v.id("leads"),
-    fromUserId: v.id("users"),
-    toUserId: v.id("users"),
-    transferType: v.union(v.literal("give"), v.literal("take")),
-    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
-    reason: v.optional(v.string()),
-    notes: v.optional(v.string()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    approvedAt: v.optional(v.number()),
-    approvedBy: v.optional(v.id("users")),
-    rejectedAt: v.optional(v.number()),
-    rejectedBy: v.optional(v.id("users")),
-    rejectionReason: v.optional(v.string()),
-    // İlişkili veriler
-    patient: v.object({
-      firstName: v.string(),
-      lastName: v.string(),
-      email: v.optional(v.string()),
-      phone: v.string(),
-      status: v.string(),
-    }),
-    fromUser: v.object({
-      name: v.optional(v.string()),
-      email: v.optional(v.string()),
-    }),
-    toUser: v.object({
-      name: v.optional(v.string()),
-      email: v.optional(v.string()),
-    }),
-    approvedByUser: v.optional(v.object({
-      name: v.optional(v.string()),
-      email: v.optional(v.string()),
-    })),
-    rejectedByUser: v.optional(v.object({
-      name: v.optional(v.string()),
-      email: v.optional(v.string()),
-    })),
-  })),
-  handler: async (ctx) => {
+  args: { 
+    paginationOpts: paginationOptsValidator 
+  },
+  handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
@@ -215,7 +188,7 @@ export const listTransferRequests = query({
       // Admin tüm istekleri görür
       transfers = await ctx.db.query("patientTransfers")
         .order("desc")
-        .collect();
+        .paginate(args.paginationOpts);
     } else {
       // Satışçı sadece kendi isteklerini görür
       transfers = await ctx.db.query("patientTransfers")
@@ -226,12 +199,12 @@ export const listTransferRequests = query({
           )
         )
         .order("desc")
-        .collect();
+        .paginate(args.paginationOpts);
     }
 
     // İlişkili verileri yükle
     const result = [];
-    for (const transfer of transfers) {
+    for (const transfer of transfers.page) {
       const patient = await ctx.db.get(transfer.patientId);
       const fromUser = await ctx.db.get(transfer.fromUserId);
       const toUser = await ctx.db.get(transfer.toUserId);
@@ -282,7 +255,11 @@ export const listTransferRequests = query({
       }
     }
 
-    return result;
+    return {
+      page: result,
+      isDone: transfers.isDone,
+      continueCursor: transfers.continueCursor,
+    };
   },
 });
 

@@ -25,19 +25,26 @@ export function MarketingTab() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // Tüm lead'leri çek
-  const leads = useQuery(api.leads.list) || [];
+  // Pagination state for leads
+  const [paginationOpts, setPaginationOpts] = useState({
+    numItems: 1000, // Marketing için daha fazla lead çekelim
+    cursor: null as string | null,
+  });
+
+  // Tüm lead'leri çek (pagination ile) - Marketing analizi için tüm leadler
+  const leadsResult = useQuery(api.leads.getAllLeadsForMarketing, { paginationOpts });
+  const leads = leadsResult?.page || [];
 
   // Reklam adlarını çıkar
   const adNames = useMemo(() => {
     const set = new Set<string>();
-    leads.forEach(l => { if (l.adName) set.add(l.adName); });
+    leads.forEach((l: any) => { if (l.adName) set.add(l.adName); });
     return Array.from(set);
   }, [leads]);
 
   // Filtrelenmiş lead'ler
   const filteredLeads = useMemo(() => {
-    return leads.filter(l => {
+    return leads.filter((l: any) => {
       if (selectedAd && l.adName !== selectedAd) return false;
       if (selectedStatus && l.status !== selectedStatus) return false;
       if (dateFrom && l.createdAt !== undefined && l.createdAt < new Date(dateFrom).getTime()) return false;
@@ -51,13 +58,30 @@ export function MarketingTab() {
     const total = filteredLeads.length;
     const byStatus: Record<string, number> = {};
     STATUS_OPTIONS.forEach(opt => { if (opt.value) byStatus[opt.value] = 0; });
-    filteredLeads.forEach(l => { if (l.status) byStatus[l.status] = (byStatus[l.status] || 0) + 1; });
+    filteredLeads.forEach((l: any) => { if (l.status) byStatus[l.status] = (byStatus[l.status] || 0) + 1; });
     return { total, byStatus };
   }, [filteredLeads]);
+
+  // Loading state
+  if (leadsResult === undefined) {
+    return (
+      <div className="p-8">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="h-4 bg-gray-200 rounded w-full mb-4"></div>
+            <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">
       <h2 className="text-2xl font-bold mb-6">Marketing Analizi</h2>
+      
       {/* Filtreler */}
       <div className="flex flex-wrap gap-4 mb-6 items-end">
         <div>
@@ -104,6 +128,7 @@ export function MarketingTab() {
           />
         </div>
       </div>
+
       {/* Özet kutuları */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-blue-100 rounded-lg p-4 text-center">
@@ -117,6 +142,7 @@ export function MarketingTab() {
           </div>
         ))}
       </div>
+
       {/* Tablo */}
       <div className="overflow-x-auto bg-white rounded-lg shadow">
         <table className="min-w-full divide-y divide-gray-200">
@@ -132,9 +158,9 @@ export function MarketingTab() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filteredLeads.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-6 text-gray-400">Sonuç bulunamadı</td></tr>
+              <tr><td colSpan={6} className="text-center py-6 text-gray-400">Sonuç bulunamadı</td></tr>
             ) : (
-              filteredLeads.map(lead => (
+              filteredLeads.map((lead: any) => (
                 <tr key={lead._id}>
                   <td className="px-4 py-2">{lead.firstName}</td>
                   <td className="px-4 py-2">{lead.lastName}</td>
@@ -148,6 +174,17 @@ export function MarketingTab() {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination info */}
+      {leadsResult && (
+        <div className="mt-4 text-center text-sm text-gray-500">
+          {leadsResult.isDone ? (
+            <p>Toplam {leads.length} lead yüklendi</p>
+          ) : (
+            <p>Daha fazla lead yüklenebilir (şu anda {leads.length} lead gösteriliyor)</p>
+          )}
+        </div>
+      )}
     </div>
   );
 } 

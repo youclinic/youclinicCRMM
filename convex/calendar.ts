@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { paginationOptsValidator } from "convex/server";
 
 // Kullanıcının etkinliklerini listele
 export const list = query({
@@ -8,6 +9,7 @@ export const list = query({
     startDate: v.optional(v.string()), // YYYY-MM-DD formatında başlangıç tarihi
     endDate: v.optional(v.string()), // YYYY-MM-DD formatında bitiş tarihi
     includeCompleted: v.optional(v.boolean()), // Tamamlanan etkinlikleri dahil et
+    paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -19,19 +21,19 @@ export const list = query({
       .query("calendarEvents")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("asc")
-      .collect();
+      .paginate(args.paginationOpts);
 
     // Tarih filtresi uygula
     if (args.startDate) {
-      events = events.filter(event => event.eventDate >= args.startDate!);
+      events.page = events.page.filter(event => event.eventDate >= args.startDate!);
     }
     if (args.endDate) {
-      events = events.filter(event => event.eventDate <= args.endDate!);
+      events.page = events.page.filter(event => event.eventDate <= args.endDate!);
     }
 
     // Tamamlanan etkinlikleri filtrele
     if (args.includeCompleted === false) {
-      events = events.filter(event => !event.isCompleted);
+      events.page = events.page.filter(event => !event.isCompleted);
     }
 
     return events;

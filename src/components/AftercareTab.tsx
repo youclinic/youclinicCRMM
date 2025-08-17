@@ -6,7 +6,15 @@ import { toast } from "sonner";
 import { PatientProfileModal } from "./PatientProfileModal";
 
 export function AftercareTab() {
-  const treatmentDonePatients = useQuery(api.leads.getTreatmentDone);
+  // Pagination state for treatment done patients
+  const [paginationOpts, setPaginationOpts] = useState({
+    numItems: 1000,
+    cursor: null as string | null,
+  });
+
+  const treatmentDoneResult = useQuery(api.leads.getTreatmentDone, { paginationOpts });
+  const treatmentDonePatients = treatmentDoneResult?.page || [];
+  
   const updateLead = useMutation(api.leads.update);
   const [editingConsultations, setEditingConsultations] = useState<Id<"leads"> | null>(null);
   const [consultationData, setConsultationData] = useState({
@@ -142,7 +150,8 @@ export function AftercareTab() {
     }
   };
 
-  if (treatmentDonePatients === undefined) {
+  // Loading state
+  if (treatmentDoneResult === undefined) {
     return (
       <div className="p-8">
         <div className="animate-pulse">
