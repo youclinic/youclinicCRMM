@@ -15,13 +15,22 @@ export const list = query({
     if (!userDoc) throw new Error("User not found");
 
     if (userDoc.role === "admin") {
-      // Admins see all leads
-      return await ctx.db.query("leads").order("desc").collect();
-    } else if (userDoc.role === "salesperson") {
-      // Salespersons see only their assigned leads
+      // Admins see all leads except treatment_done
       return await ctx.db
         .query("leads")
-        .filter(q => q.eq(q.field("assignedTo"), userId))
+        .filter(q => q.neq(q.field("status"), "treatment_done"))
+        .order("desc")
+        .collect();
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons see only their assigned leads except treatment_done
+      return await ctx.db
+        .query("leads")
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.neq(q.field("status"), "treatment_done")
+          )
+        )
         .order("desc")
         .collect();
     } else {
@@ -176,6 +185,15 @@ export const update = mutation({
     consultation1Date: v.optional(v.string()),
     consultation2Date: v.optional(v.string()),
     consultation3Date: v.optional(v.string()),
+    consultation4Date: v.optional(v.string()),
+    consultation1Status: v.optional(v.union(v.literal("scheduled"), v.literal("completed"), v.literal("cancelled"), v.literal("no_show"))),
+    consultation2Status: v.optional(v.union(v.literal("scheduled"), v.literal("completed"), v.literal("cancelled"), v.literal("no_show"))),
+    consultation3Status: v.optional(v.union(v.literal("scheduled"), v.literal("completed"), v.literal("cancelled"), v.literal("no_show"))),
+    consultation4Status: v.optional(v.union(v.literal("scheduled"), v.literal("completed"), v.literal("cancelled"), v.literal("no_show"))),
+    consultation1Notes: v.optional(v.string()),
+    consultation2Notes: v.optional(v.string()),
+    consultation3Notes: v.optional(v.string()),
+    consultation4Notes: v.optional(v.string()),
     nextFollowUpDate: v.optional(v.string()),
     followUpCount: v.optional(v.number()),
     arrivalDate: v.optional(v.string()),
@@ -344,10 +362,17 @@ export const getStats = query({
 
     let leads;
     if (userDoc.role === "admin") {
-      leads = await ctx.db.query("leads").collect();
+      leads = await ctx.db.query("leads")
+        .filter(q => q.neq(q.field("status"), "treatment_done"))
+        .collect();
     } else if (userDoc.role === "salesperson") {
       leads = await ctx.db.query("leads")
-        .filter(q => q.eq(q.field("assignedTo"), userId))
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.neq(q.field("status"), "treatment_done")
+          )
+        )
         .collect();
     } else {
       throw new Error("Invalid user role");
@@ -381,8 +406,10 @@ export const searchLeads = query({
     if (!userDoc) throw new Error("User not found");
     const q = args.query.trim().toLowerCase();
     if (!q) return [];
-    // Herkes tüm hastaları arayabilsin
-    const allLeads = await ctx.db.query("leads").collect();
+    // Herkes tüm hastaları arayabilsin (treatment_done hariç)
+    const allLeads = await ctx.db.query("leads")
+      .filter(q => q.neq(q.field("status"), "treatment_done"))
+      .collect();
     // Normalize fonksiyonu: harfleri küçült, boşluk ve özel karakterleri kaldır
     const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ\s]/gi, "").replace(/\s+/g, "");
     const normalizedQ = normalize(q);
@@ -424,8 +451,15 @@ export const getStatsForUser = query({
     const currentUser = await ctx.db.get(currentUserId);
     if (!currentUser || currentUser.role !== "admin") throw new Error("Only admins can view stats for users");
 
-    // İlgili kullanıcıya ait leadleri çek
-    const leads = await ctx.db.query("leads").filter(q => q.eq(q.field("assignedTo"), args.userId)).collect();
+    // İlgili kullanıcıya ait leadleri çek (treatment_done hariç)
+    const leads = await ctx.db.query("leads")
+      .filter(q => 
+        q.and(
+          q.eq(q.field("assignedTo"), args.userId),
+          q.neq(q.field("status"), "treatment_done")
+        )
+      )
+      .collect();
     const stats = {
       total: leads.length,
       new_lead: leads.filter(l => l.status === "new_lead").length,
@@ -459,13 +493,21 @@ export const getDashboardLeads = query({
 
     let leads;
     if (userDoc.role === "admin") {
-      // Admins see all leads
-      leads = await ctx.db.query("leads").order("desc").collect();
+      // Admins see all leads except treatment_done
+      leads = await ctx.db.query("leads")
+        .filter(q => q.neq(q.field("status"), "treatment_done"))
+        .order("desc")
+        .collect();
     } else if (userDoc.role === "salesperson") {
-      // Salespersons see only their assigned leads
+      // Salespersons see only their assigned leads except treatment_done
       leads = await ctx.db
         .query("leads")
-        .filter(q => q.eq(q.field("assignedTo"), userId))
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.neq(q.field("status"), "treatment_done")
+          )
+        )
         .order("desc")
         .collect();
     } else {
@@ -602,12 +644,19 @@ export const getNewLeadsCount = query({
 
     let leads;
     if (userDoc.role === "admin") {
-      // Admins see all leads
-      leads = await ctx.db.query("leads").collect();
-    } else if (userDoc.role === "salesperson") {
-      // Salespersons see only their assigned leads
+      // Admins see all leads except treatment_done
       leads = await ctx.db.query("leads")
-        .filter(q => q.eq(q.field("assignedTo"), userId))
+        .filter(q => q.neq(q.field("status"), "treatment_done"))
+        .collect();
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons see only their assigned leads except treatment_done
+      leads = await ctx.db.query("leads")
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.neq(q.field("status"), "treatment_done")
+          )
+        )
         .collect();
     } else {
       throw new Error("Invalid user role");
@@ -616,5 +665,139 @@ export const getNewLeadsCount = query({
     // Filter for new leads (checking both "new" and "new_lead" statuses)
     const newLeads = leads.filter(lead => lead.status === "new" || lead.status === "new_lead");
     return newLeads.length;
+  },
+});
+
+// Proforma invoice functions
+export const createProformaInvoice = mutation({
+  args: {
+    patientId: v.id("leads"),
+    items: v.array(v.object({
+      description: v.string(),
+      amount: v.number(),
+    })),
+    deposit: v.number(),
+    currency: v.string(),
+    salespersonPhone: v.string(),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Calculate totals
+    const total = args.items.reduce((sum, item) => sum + item.amount, 0);
+    const remaining = total - args.deposit;
+
+    // Generate invoice number (format: PRO-YYYYMMDD-XXX)
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    
+    // Get count of invoices for today
+    const todayInvoices = await ctx.db
+      .query("proformaInvoices")
+      .filter(q => q.eq(q.field("invoiceDate"), today.toISOString().slice(0, 10)))
+      .collect();
+    
+    const invoiceNumber = `PRO-${dateStr}-${(todayInvoices.length + 1).toString().padStart(3, '0')}`;
+
+    return await ctx.db.insert("proformaInvoices", {
+      patientId: args.patientId,
+      createdBy: userId,
+      invoiceNumber,
+      invoiceDate: today.toISOString().slice(0, 10),
+      items: args.items,
+      total,
+      deposit: args.deposit,
+      remaining,
+      currency: args.currency || "USD", // Default to USD if not provided
+      salespersonPhone: args.salespersonPhone,
+      notes: args.notes,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const getProformaInvoices = query({
+  args: {
+    patientId: v.id("leads"),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    return await ctx.db
+      .query("proformaInvoices")
+      .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
+      .order("desc")
+      .collect();
+  },
+});
+
+export const getProformaInvoiceById = query({
+  args: {
+    invoiceId: v.id("proformaInvoices"),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    return await ctx.db.get(args.invoiceId);
+  },
+});
+
+export const updateProformaInvoice = mutation({
+  args: {
+    invoiceId: v.id("proformaInvoices"),
+    items: v.array(v.object({
+      description: v.string(),
+      amount: v.number(),
+    })),
+    deposit: v.number(),
+    currency: v.string(),
+    salespersonPhone: v.string(),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Calculate totals
+    const total = args.items.reduce((sum, item) => sum + item.amount, 0);
+    const remaining = total - args.deposit;
+
+    return await ctx.db.patch(args.invoiceId, {
+      items: args.items,
+      total,
+      deposit: args.deposit,
+      remaining,
+      currency: args.currency,
+      salespersonPhone: args.salespersonPhone,
+      notes: args.notes,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+export const deleteProformaInvoice = mutation({
+  args: {
+    invoiceId: v.id("proformaInvoices"),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    return await ctx.db.delete(args.invoiceId);
   },
 });

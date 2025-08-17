@@ -191,6 +191,7 @@ export const createSalespersonWithPassword = mutation({
     email: v.string(),
     password: v.string(),
     name: v.optional(v.string()),
+    phone: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const currentUserId = await getAuthUserId(ctx);
@@ -208,6 +209,7 @@ export const createSalespersonWithPassword = mutation({
       name: args.name || args.email.split('@')[0].replace('.', ' '),
       role: "salesperson",
       isAnonymous: false,
+      phone: args.phone || "",
     });
 
     // Password provider ile şifreyi kaydet
@@ -221,5 +223,18 @@ export const createSalespersonWithPassword = mutation({
 
     await ctx.db.patch(userId, { authId: userId });
     return { success: true };
+  },
+});
+
+// Update user phone number
+export const updateUserPhone = mutation({
+  args: {
+    phone: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    
+    return await ctx.db.patch(userId, { phone: args.phone });
   },
 });

@@ -3,6 +3,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { toast } from "sonner";
+import { Plus, Trash2, FileText, Download } from "lucide-react";
+import { ProformaPDF } from "./ProformaPDF";
 
 interface PatientProfileModalProps {
   patientId: Id<"leads"> | null;
@@ -12,10 +14,14 @@ interface PatientProfileModalProps {
 export function PatientProfileModal({ patientId, onClose }: PatientProfileModalProps) {
   const patient = useQuery(api.leads.getById, patientId ? { id: patientId } : "skip");
   const currentUser = useQuery(api.auth.loggedInUser);
+  const proformaInvoices = useQuery(api.leads.getProformaInvoices, patientId ? { patientId } : "skip");
   const updateLead = useMutation(api.leads.update);
   const generateUploadUrl = useMutation(api.leads.generateUploadUrl);
   const addFile = useMutation(api.leads.addFile);
   const removeFile = useMutation(api.leads.removeFile);
+  const createProformaInvoice = useMutation(api.leads.createProformaInvoice);
+  const deleteProformaInvoice = useMutation(api.leads.deleteProformaInvoice);
+  const updateUserPhone = useMutation(api.users.updateUserPhone);
   
   const [uploadingFile, setUploadingFile] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
@@ -23,6 +29,29 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
   const [editingArrivalDate, setEditingArrivalDate] = useState(false);
   const [arrivalDateValue, setArrivalDateValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showProformaModal, setShowProformaModal] = useState(false);
+  const [showPDFModal, setShowPDFModal] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [showFileViewerModal, setShowFileViewerModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<any>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [proformaForm, setProformaForm] = useState({
+    items: [{ description: "", amount: 0 }],
+    deposit: 0,
+    currency: "USD",
+    salespersonPhone: currentUser?.phone || "",
+    notes: "",
+  });
+
+  // Update proforma form when currentUser changes
+  useEffect(() => {
+    if (currentUser?.phone && currentUser.phone.trim() !== "") {
+      setProformaForm(prev => ({
+        ...prev,
+        salespersonPhone: currentUser.phone || ""
+      }));
+    }
+  }, [currentUser?.phone]);
 
   // Check if current user can view sensitive information
   const canViewSensitiveInfo = () => {
@@ -173,51 +202,176 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
     if (!patientId) return;
     
     try {
-      await updateLead({ id: patientId as Id<"leads">, arrivalDate: arrivalDateValue });
-      toast.success("Arrival date saved successfully!");
-      setEditingArrivalDate(false);
+      await updateLead({
+        id: patientId,
+        arrivalDate: arrivalDateValue,
+      });
+      toast.success("Arrival date updated successfully!");
+      setArrivalDateValue("");
     } catch (error) {
-      toast.error("Failed to save arrival date");
+      toast.error("Failed to update arrival date");
     }
+  };
+
+  // Proforma functions
+  const handleAddItem = () => {
+    setProformaForm(prev => ({
+      ...prev,
+      items: [...prev.items, { description: "", amount: 0 }]
+    }));
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setProformaForm(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleItemChange = (index: number, field: 'description' | 'amount', value: string | number) => {
+    setProformaForm(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => 
+        i === index ? { ...item, [field]: value } : item
+      )
+    }));
+  };
+
+  const handleCreateProforma = async () => {
+    if (!patientId) return;
+
+    // Validate form
+    if (proformaForm.items.some(item => !item.description.trim() || item.amount <= 0)) {
+      toast.error("Please fill all item descriptions and amounts");
+      return;
+    }
+
+    if (proformaForm.deposit < 0) {
+      toast.error("Deposit cannot be negative");
+      return;
+    }
+
+    if (!proformaForm.salespersonPhone.trim()) {
+      toast.error("Please enter salesperson phone number");
+      return;
+    }
+
+    try {
+      await createProformaInvoice({
+        patientId,
+        items: proformaForm.items,
+        deposit: proformaForm.deposit,
+        currency: proformaForm.currency,
+        salespersonPhone: proformaForm.salespersonPhone,
+        notes: proformaForm.notes,
+      });
+      
+      toast.success("Proforma invoice created successfully!");
+      setShowProformaModal(false);
+      setProformaForm({
+        items: [{ description: "", amount: 0 }],
+        deposit: 0,
+        currency: "USD",
+        salespersonPhone: currentUser?.phone || "",
+        notes: "",
+      });
+    } catch (error) {
+      toast.error("Failed to create proforma invoice");
+    }
+  };
+
+  const handleViewProforma = (invoiceId: Id<"proformaInvoices">) => {
+    const invoice = proformaInvoices?.find(inv => inv._id === invoiceId);
+    if (invoice) {
+      setSelectedInvoice(invoice);
+      setShowPDFModal(true);
+    }
+  };
+
+  const handleViewFile = (file: any) => {
+    setSelectedFile(file);
+    setShowFileViewerModal(true);
+  };
+
+  const handleDownloadProforma = async (invoiceId: Id<"proformaInvoices">) => {
+    const invoice = proformaInvoices?.find(inv => inv._id === invoiceId);
+    if (invoice) {
+      setSelectedInvoice(invoice);
+      setShowDownloadModal(true);
+    }
+  };
+
+  const handleDeleteProforma = async (invoiceId: Id<"proformaInvoices">) => {
+    if (confirm("Are you sure you want to delete this proforma invoice? This action cannot be undone.")) {
+      try {
+        await deleteProformaInvoice({ invoiceId });
+        toast.success("Proforma invoice deleted successfully");
+      } catch (error) {
+        console.error("Error deleting proforma invoice:", error);
+        toast.error("Failed to delete proforma invoice");
+      }
+    }
+  };
+
+  const calculateTotal = () => {
+    return proformaForm.items.reduce((sum, item) => sum + item.amount, 0);
+  };
+
+  const calculateRemaining = () => {
+    return calculateTotal() - proformaForm.deposit;
   };
 
   const FileItem = ({ file, onRemove }: { file: any; onRemove: () => void }) => {
     const canViewFiles = () => {
-      if (!currentUser || !patient) return false;
-      
+      if (!currentUser) return false;
       if (currentUser.role === "admin") return true;
-      
+      // For salesperson, check if they can view this patient's files
       if (currentUser.role === "salesperson") {
-        return patient.assignedTo === currentUser._id;
+        // If patient is assigned to current user, they can view files
+        if (patient?.assignedTo === currentUser._id) return true;
+        // If patient has no assignment, salesperson can view
+        if (!patient?.assignedTo) return true;
       }
-      
       return false;
     };
 
+    const formatUploadDate = (timestamp: number) => {
+      return new Date(timestamp).toLocaleDateString('tr-TR');
+    };
+
+    const getFileIcon = (fileType: string) => {
+      if (fileType.includes('image')) return '🖼️';
+      if (fileType.includes('pdf')) return '📄';
+      if (fileType.includes('word') || fileType.includes('document')) return '📝';
+      if (fileType.includes('excel') || fileType.includes('spreadsheet')) return '📊';
+      return '📎';
+    };
+
     return (
-      <div className="flex items-center justify-between p-2 bg-white rounded border">
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-600">{file.fileName}</span>
-          <span className="text-xs text-gray-400">
-            {new Date(file.uploadTime).toLocaleDateString('tr-TR')}
-          </span>
+      <div className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
+        <div className="flex items-center space-x-3">
+          <span className="text-2xl">{getFileIcon(file.fileType)}</span>
+          <div>
+            <div className="font-medium text-gray-900">{file.fileName}</div>
+            <div className="text-sm text-gray-500">
+              Uploaded: {formatUploadDate(file.uploadedAt)}
+            </div>
+          </div>
         </div>
         <div className="flex items-center space-x-2">
           {canViewFiles() && (
-            <a
-              href={`/api/files/${file.fileId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800 text-sm"
+            <button
+              onClick={() => handleViewFile(file)}
+              className="px-3 py-1 text-blue-600 hover:text-blue-800 text-sm font-medium"
             >
               View
-            </a>
+            </button>
           )}
           <button
             onClick={onRemove}
-            className="text-red-600 hover:text-red-800 text-sm"
+            className="px-3 py-1 text-red-600 hover:text-red-800 text-sm font-medium"
           >
-            Delete
+            Remove
           </button>
         </div>
       </div>
@@ -590,6 +744,142 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
               </div>
             )}
 
+            {/* Consultation Information */}
+            {(patient.consultation1Date || patient.consultation2Date || patient.consultation3Date) && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Consultation Information</h3>
+                <div className="space-y-4">
+                  {/* Consultation 1 */}
+                  {patient.consultation1Date && (
+                    <div className="border-l-4 border-blue-500 pl-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium text-gray-900">First Consultation</h4>
+                          <p className="text-sm text-gray-600">
+                            {new Date(patient.consultation1Date).toLocaleDateString('tr-TR')}
+                          </p>
+                          {patient.consultation1Status && (
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-1 ${
+                              patient.consultation1Status === 'completed' ? 'bg-green-100 text-green-800' :
+                              patient.consultation1Status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                              patient.consultation1Status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {patient.consultation1Status === 'completed' ? 'Completed' :
+                               patient.consultation1Status === 'scheduled' ? 'Scheduled' :
+                               patient.consultation1Status === 'cancelled' ? 'Cancelled' :
+                               'No Show'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {patient.consultation1Notes && (
+                        <div className="mt-2">
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{patient.consultation1Notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Consultation 2 */}
+                  {patient.consultation2Date && (
+                    <div className="border-l-4 border-green-500 pl-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium text-gray-900">Second Consultation</h4>
+                          <p className="text-sm text-gray-600">
+                            {new Date(patient.consultation2Date).toLocaleDateString('tr-TR')}
+                          </p>
+                          {patient.consultation2Status && (
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-1 ${
+                              patient.consultation2Status === 'completed' ? 'bg-green-100 text-green-800' :
+                              patient.consultation2Status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                              patient.consultation2Status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {patient.consultation2Status === 'completed' ? 'Completed' :
+                               patient.consultation2Status === 'scheduled' ? 'Scheduled' :
+                               patient.consultation2Status === 'cancelled' ? 'Cancelled' :
+                               'No Show'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {patient.consultation2Notes && (
+                        <div className="mt-2">
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{patient.consultation2Notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Consultation 3 */}
+                  {patient.consultation3Date && (
+                    <div className="border-l-4 border-purple-500 pl-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium text-gray-900">Third Consultation</h4>
+                          <p className="text-sm text-gray-600">
+                            {new Date(patient.consultation3Date).toLocaleDateString('tr-TR')}
+                          </p>
+                          {patient.consultation3Status && (
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-1 ${
+                              patient.consultation3Status === 'completed' ? 'bg-green-100 text-green-800' :
+                              patient.consultation3Status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                              patient.consultation3Status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {patient.consultation3Status === 'completed' ? 'Completed' :
+                               patient.consultation3Status === 'scheduled' ? 'Scheduled' :
+                               patient.consultation3Status === 'cancelled' ? 'Cancelled' :
+                               'No Show'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {patient.consultation3Notes && (
+                        <div className="mt-2">
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{patient.consultation3Notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Consultation 4 */}
+                  {patient.consultation4Date && (
+                    <div className="border-l-4 border-indigo-500 pl-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium text-gray-900">Fourth Consultation</h4>
+                          <p className="text-sm text-gray-600">
+                            {new Date(patient.consultation4Date).toLocaleDateString('tr-TR')}
+                          </p>
+                          {patient.consultation4Status && (
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-1 ${
+                              patient.consultation4Status === 'completed' ? 'bg-green-100 text-green-800' :
+                              patient.consultation4Status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                              patient.consultation4Status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {patient.consultation4Status === 'completed' ? 'Completed' :
+                               patient.consultation4Status === 'scheduled' ? 'Scheduled' :
+                               patient.consultation4Status === 'cancelled' ? 'Cancelled' :
+                               'No Show'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {patient.consultation4Notes && (
+                        <div className="mt-2">
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{patient.consultation4Notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Sales Information */}
             {(patient.price || patient.deposit || patient.saleDate) && (
               <div className="bg-gray-50 p-4 rounded-lg">
@@ -738,6 +1028,310 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
           </div>
         </div>
       </div>
+
+      {/* Proforma Invoices Section */}
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Proforma Invoices</h3>
+          <button
+            onClick={() => setShowProformaModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Create Proforma
+          </button>
+        </div>
+        
+        {proformaInvoices && proformaInvoices.length > 0 ? (
+          <div className="space-y-3">
+            {proformaInvoices.map((invoice) => (
+              <div key={invoice._id} className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <div className="font-medium">{invoice.invoiceNumber}</div>
+                  <div className="text-sm text-gray-500">
+                    {new Date(invoice.invoiceDate).toLocaleDateString('tr-TR')} - 
+                    Total: {(invoice.currency || "USD") === "USD" ? "$" : 
+                           (invoice.currency || "USD") === "EUR" ? "€" : 
+                           (invoice.currency || "USD") === "TRY" ? "₺" : 
+                           (invoice.currency || "USD") === "GBP" ? "£" : ""}{invoice.total.toLocaleString()}
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleViewProforma(invoice._id)}
+                    className="flex items-center gap-2 px-3 py-1 text-green-600 hover:text-green-800"
+                  >
+                    <FileText className="w-4 h-4" />
+                    View
+                  </button>
+                  <button
+                    onClick={() => handleDownloadProforma(invoice._id)}
+                    className="flex items-center gap-2 px-3 py-1 text-blue-600 hover:text-blue-800"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download
+                  </button>
+                  <button
+                    onClick={() => handleDeleteProforma(invoice._id)}
+                    className="flex items-center gap-2 px-3 py-1 text-red-600 hover:text-red-800"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500 text-center py-4">No proforma invoices found</p>
+        )}
+      </div>
+
+      {/* Proforma Creation Modal */}
+      {showProformaModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold mb-4">Create Proforma Invoice</h3>
+            
+            <div className="space-y-6">
+              {/* Items Section */}
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="font-semibold">Items</h4>
+                  <button
+                    onClick={handleAddItem}
+                    className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add Item
+                  </button>
+                </div>
+                
+                <div className="space-y-3">
+                  {proformaForm.items.map((item, index) => (
+                    <div key={index} className="flex gap-3 items-center">
+                      <input
+                        type="text"
+                        placeholder="Item description"
+                        value={item.description}
+                        onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Amount"
+                        value={item.amount}
+                        onChange={(e) => handleItemChange(index, 'amount', parseFloat(e.target.value) || 0)}
+                        className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {proformaForm.items.length > 1 && (
+                        <button
+                          onClick={() => handleRemoveItem(index)}
+                          className="p-2 text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Summary Section */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Currency
+                    </label>
+                    <select
+                      value={proformaForm.currency}
+                      onChange={(e) => setProformaForm(prev => ({ ...prev, currency: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="TRY">TRY (₺)</option>
+                      <option value="GBP">GBP (£)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Total
+                    </label>
+                    <div className="text-lg font-bold text-gray-900">
+                      {proformaForm.currency === "USD" ? "$" : 
+                       proformaForm.currency === "EUR" ? "€" : 
+                       proformaForm.currency === "TRY" ? "₺" : 
+                       proformaForm.currency === "GBP" ? "£" : ""}{calculateTotal().toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Deposit
+                    </label>
+                    <input
+                      type="number"
+                      value={proformaForm.deposit}
+                      onChange={(e) => setProformaForm(prev => ({ ...prev, deposit: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Remaining
+                    </label>
+                    <div className="text-lg font-bold text-blue-600">
+                      {proformaForm.currency === "USD" ? "$" : 
+                       proformaForm.currency === "EUR" ? "€" : 
+                       proformaForm.currency === "TRY" ? "₺" : 
+                       proformaForm.currency === "GBP" ? "£" : ""}{calculateRemaining().toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Salesperson Phone */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Salesperson Phone *
+                </label>
+                <input
+                  type="text"
+                  value={proformaForm.salespersonPhone}
+                  onChange={(e) => setProformaForm(prev => ({ ...prev, salespersonPhone: e.target.value }))}
+                  placeholder="+90 (541) 974 30 03"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  value={proformaForm.notes}
+                  onChange={(e) => setProformaForm(prev => ({ ...prev, notes: e.target.value }))}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Additional notes..."
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowProformaModal(false)}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateProforma}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Create Proforma
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Proforma PDF Modal */}
+      {showPDFModal && selectedInvoice && (
+        <ProformaPDF 
+          invoice={selectedInvoice} 
+          patient={patient}
+          createdBy={currentUser}
+          autoDownload={false}
+          onClose={() => setShowPDFModal(false)} 
+        />
+      )}
+
+      {/* Proforma Download Modal */}
+      {showDownloadModal && selectedInvoice && (
+        <ProformaPDF 
+          invoice={selectedInvoice} 
+          patient={patient}
+          createdBy={currentUser}
+          autoDownload={true}
+          onClose={() => setShowDownloadModal(false)} 
+        />
+      )}
+
+      {/* File Viewer Modal */}
+      {showFileViewerModal && selectedFile && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">File Viewer: {selectedFile.fileName}</h3>
+              <button
+                onClick={() => setShowFileViewerModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                <span className="text-2xl">
+                  {selectedFile.fileType.includes('image') ? '🖼️' : 
+                   selectedFile.fileType.includes('pdf') ? '📄' : 
+                   selectedFile.fileType.includes('word') ? '📝' : 
+                   selectedFile.fileType.includes('excel') ? '📊' : '📎'}
+                </span>
+                <div>
+                  <div className="font-medium">{selectedFile.fileName}</div>
+                  <div className="text-sm text-gray-500">
+                    Type: {selectedFile.fileType} | 
+                    Uploaded: {new Date(selectedFile.uploadedAt).toLocaleDateString('tr-TR')}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="border rounded-lg p-4">
+                {selectedFile.fileType.includes('image') ? (
+                  <img 
+                    src={`/api/files/${selectedFile.fileId}`} 
+                    alt={selectedFile.fileName}
+                    className="max-w-full h-auto"
+                    onError={(e) => {
+                      const target = e.currentTarget as HTMLImageElement;
+                      target.style.display = 'none';
+                      const nextElement = target.nextElementSibling as HTMLElement;
+                      if (nextElement) {
+                        nextElement.style.display = 'block';
+                      }
+                    }}
+                  />
+                ) : selectedFile.fileType.includes('pdf') ? (
+                  <iframe 
+                    src={`/api/files/${selectedFile.fileId}`}
+                    className="w-full h-96 border-0"
+                    title={selectedFile.fileName}
+                  />
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 mb-4">
+                      This file type cannot be previewed directly.
+                    </p>
+                    <a
+                      href={`/api/files/${selectedFile.fileId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                      Download to View
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

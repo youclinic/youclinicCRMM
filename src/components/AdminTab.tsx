@@ -8,12 +8,15 @@ export function AdminTab() {
   const allUsers = useQuery(api.users.getAllUsers);
   const createSalespersonAccounts = useMutation(api.users.createSalespersonAccounts);
   const updateUserRole = useMutation(api.users.updateUserRole);
+  const updateUserPhone = useMutation(api.users.updateUserPhone);
   const makeCurrentUserAdmin = useMutation(api.users.makeCurrentUserAdmin);
   const fixUserRoles = useMutation(api.users.fixUserRoles);
   const deleteUser = useMutation(api.users.deleteUser);
   const createSalespersonWithPassword = useMutation(api.users.createSalespersonWithPassword);
   const [selectedSalesperson, setSelectedSalesperson] = useState<any>(null);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [editingPhone, setEditingPhone] = useState<string | null>(null);
+  const [newPhone, setNewPhone] = useState("");
 
   const handleUpdateUserRole = async (userId: string, newRole: string) => {
     try {
@@ -39,6 +42,18 @@ export function AdminTab() {
       toast.success(result.message);
     } catch (error) {
       toast.error("Failed to fix user roles");
+    }
+  };
+
+  const handleUpdatePhone = async (userId: string, phone: string) => {
+    try {
+      // For now, we'll show a message that this feature needs to be implemented
+      // The updateUserPhone mutation is designed for the current user only
+      toast.info("Phone number update feature will be implemented soon. For now, users can update their own phone numbers in their profile.");
+      setEditingPhone(null);
+      setNewPhone("");
+    } catch (error) {
+      toast.error("Failed to update phone number");
     }
   };
 
@@ -142,6 +157,9 @@ export function AdminTab() {
                   Email
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Phone
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Role
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -165,6 +183,46 @@ export function AdminTab() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {user.email || "No email"}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {editingPhone === user._id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newPhone}
+                          onChange={(e) => setNewPhone(e.target.value)}
+                          placeholder="Enter phone number"
+                          className="px-2 py-1 border border-gray-300 rounded text-sm"
+                        />
+                        <button
+                          onClick={() => handleUpdatePhone(user._id, newPhone)}
+                          className="text-green-600 hover:text-green-800 text-sm"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingPhone(null)}
+                          className="text-gray-600 hover:text-gray-800 text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span>{user.phone || "No phone"}</span>
+                        {user.role === "salesperson" && (
+                          <button
+                            onClick={() => {
+                              setEditingPhone(user._id);
+                              setNewPhone(user.phone || "");
+                            }}
+                            className="text-blue-600 hover:text-blue-800 text-sm"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${

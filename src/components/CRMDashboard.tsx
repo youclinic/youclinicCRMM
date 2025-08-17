@@ -12,8 +12,10 @@ import { Id } from "../../convex/_generated/dataModel";
 import { MarketingTab } from "./MarketingTab";
 import { LogTab } from "./LogTab";
 import { TransfersTab } from "./TransfersTab";
+import { CalendarTab } from "./CalendarTab";
+import { ProfileTab } from "./ProfileTab";
 
-type Tab = "dashboard" | "leads" | "patients" | "solds" | "aftercare" | "admin" | "marketing" | "log" | "transfers";
+type Tab = "dashboard" | "leads" | "patients" | "solds" | "aftercare" | "admin" | "marketing" | "log" | "transfers" | "calendar" | "profile";
 
 export function CRMDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
@@ -47,9 +49,11 @@ export function CRMDashboard() {
     { id: "solds" as Tab, label: "Sold", icon: "💰" },
     { id: "aftercare" as Tab, label: "Aftercare", icon: "🏥" },
     { id: "transfers" as Tab, label: "Hasta Takas", icon: "🔄" },
+    { id: "calendar" as Tab, label: "Takvim", icon: "📅" },
     { id: "marketing" as Tab, label: "Marketing", icon: "📈" },
     ...(isAdmin ? [{ id: "admin" as Tab, label: "Admin", icon: "⚙️" }] : []),
     ...(isAdmin ? [{ id: "log" as Tab, label: "Log", icon: "📝" }] : []),
+    { id: "profile" as Tab, label: "Profile", icon: "👤" },
   ];
 
   // If not admin and activeTab is admin, force dashboard
@@ -67,9 +71,7 @@ export function CRMDashboard() {
       <div className="w-64 bg-white shadow-lg">
         <div className="p-6 border-b">
           <div className="flex items-center space-x-3 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
-              YC
-            </div>
+            <img src="/logo.png" alt="You Clinic Logo" className="w-12 h-12 object-contain" />
             <div>
               <h1 className="text-xl font-bold text-gray-900">You Clinic</h1>
               <p className="text-sm text-gray-500">Patient Management</p>
@@ -90,9 +92,12 @@ export function CRMDashboard() {
                 return email.slice(0, 2).toUpperCase();
               })()}
             </div>
-            <div>
+            <div className="flex-1">
               <p className="font-medium text-gray-900">{loggedInUser?.email}</p>
               <p className="text-xs text-gray-500">{isAdmin ? "Administrator" : "User"}</p>
+              {loggedInUser?.phone && (
+                <p className="text-xs text-gray-500">{loggedInUser.phone}</p>
+              )}
             </div>
           </div>
         </div>
@@ -169,6 +174,8 @@ export function CRMDashboard() {
         {safeActiveTab === "admin" && isAdmin && <AdminTab />}
         {safeActiveTab === "log" && isAdmin && <LogTab />}
         {safeActiveTab === "transfers" && <TransfersTab />}
+        {safeActiveTab === "calendar" && <CalendarTab />}
+        {safeActiveTab === "profile" && <ProfileTab />}
         {/* Hasta Profil Modalı */}
         {selectedPatientId && (
           <PatientProfileModal patientId={selectedPatientId} onClose={() => setSelectedPatientId(null)} />

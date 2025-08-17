@@ -5,6 +5,7 @@ import { Id } from "../../convex/_generated/dataModel";
 export function DashboardTab() {
   const stats = useQuery(api.leads.getStats);
   const recentLeads = useQuery(api.leads.getDashboardLeads);
+  const todayEvents = useQuery(api.calendar.getToday);
 
   if (stats === undefined || recentLeads === undefined) {
     return (
@@ -63,10 +64,55 @@ export function DashboardTab() {
         ))}
       </div>
 
+      {/* Today's Events Section */}
+      {todayEvents && todayEvents.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6 mt-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Bugünkü Görevler</h2>
+          <div className="space-y-3">
+            {todayEvents.map((event) => (
+              <div
+                key={event._id}
+                className={`flex items-center justify-between p-3 rounded-lg border ${
+                  event.isCompleted ? "bg-gray-50" : "bg-blue-50"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full ${
+                    event.priority === "high" ? "bg-red-500" :
+                    event.priority === "medium" ? "bg-yellow-500" : "bg-green-500"
+                  }`}></div>
+                  <div>
+                    <div className={`font-medium ${event.isCompleted ? "line-through text-gray-500" : ""}`}>
+                      {event.title}
+                    </div>
+                    {event.description && (
+                      <div className="text-sm text-gray-600">{event.description}</div>
+                    )}
+                    {event.eventTime && (
+                      <div className="text-sm text-gray-500">{event.eventTime}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500">
+                  {event.priority === "high" ? "Yüksek" :
+                   event.priority === "medium" ? "Orta" : "Düşük"} Öncelik
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Calendar Section */}
       <div className="bg-white rounded-lg shadow p-6 mt-8">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Calendar</h2>
         <TenDayFollowUpCalendar leads={recentLeads} />
+      </div>
+
+      {/* Consultation Tracking Section */}
+      <div className="bg-white rounded-lg shadow p-6 mt-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Consultation Tracking</h2>
+        <ConsultationTracking leads={recentLeads} />
       </div>
     </div>
   );
@@ -80,6 +126,15 @@ interface Lead {
   consultation1Date?: string;
   consultation2Date?: string;
   consultation3Date?: string;
+  consultation4Date?: string;
+  consultation1Status?: "scheduled" | "completed" | "cancelled" | "no_show";
+  consultation2Status?: "scheduled" | "completed" | "cancelled" | "no_show";
+  consultation3Status?: "scheduled" | "completed" | "cancelled" | "no_show";
+  consultation4Status?: "scheduled" | "completed" | "cancelled" | "no_show";
+  consultation1Notes?: string;
+  consultation2Notes?: string;
+  consultation3Notes?: string;
+  consultation4Notes?: string;
 }
 
 function TenDayFollowUpCalendar({ leads }: { leads: Lead[] }) {
@@ -101,7 +156,7 @@ function TenDayFollowUpCalendar({ leads }: { leads: Lead[] }) {
   const monthName = days[0].date.toLocaleString('tr-TR', { month: 'long', year: 'numeric' });
   
   // Her gün için isimleri bul
-  const followUpMap: Record<string, Array<{name: string, type: 'followup' | 'consultation1' | 'consultation2' | 'consultation3'}>> = {};
+  const followUpMap: Record<string, Array<{name: string, type: 'followup' | 'consultation1' | 'consultation2' | 'consultation3' | 'consultation4'}>> = {};
   
   for (const lead of leads) {
     // Follow-up tarihleri
@@ -137,9 +192,17 @@ function TenDayFollowUpCalendar({ leads }: { leads: Lead[] }) {
         type: 'consultation3'
       });
     }
+    
+    if (lead.consultation4Date) {
+      if (!followUpMap[lead.consultation4Date]) followUpMap[lead.consultation4Date] = [];
+      followUpMap[lead.consultation4Date].push({
+        name: `${lead.firstName} ${lead.lastName}`,
+        type: 'consultation4'
+      });
+    }
   }
   
-  const getEventColor = (type: 'followup' | 'consultation1' | 'consultation2' | 'consultation3') => {
+  const getEventColor = (type: 'followup' | 'consultation1' | 'consultation2' | 'consultation3' | 'consultation4') => {
     switch (type) {
       case 'followup':
         return 'bg-blue-100 text-blue-800';
@@ -149,12 +212,14 @@ function TenDayFollowUpCalendar({ leads }: { leads: Lead[] }) {
         return 'bg-yellow-100 text-yellow-800';
       case 'consultation3':
         return 'bg-purple-100 text-purple-800';
+      case 'consultation4':
+        return 'bg-indigo-100 text-indigo-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
   
-  const getEventLabel = (type: 'followup' | 'consultation1' | 'consultation2' | 'consultation3') => {
+  const getEventLabel = (type: 'followup' | 'consultation1' | 'consultation2' | 'consultation3' | 'consultation4') => {
     switch (type) {
       case 'followup':
         return 'Follow-up';
@@ -164,6 +229,8 @@ function TenDayFollowUpCalendar({ leads }: { leads: Lead[] }) {
         return 'Consultation 2';
       case 'consultation3':
         return 'Consultation 3';
+      case 'consultation4':
+        return 'Consultation 4';
       default:
         return '';
     }
@@ -191,6 +258,10 @@ function TenDayFollowUpCalendar({ leads }: { leads: Lead[] }) {
           <div className="w-3 h-3 bg-purple-100 border border-purple-300 rounded"></div>
           <span className="text-xs text-gray-600">Consultation 3</span>
         </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 bg-indigo-100 border border-indigo-300 rounded"></div>
+          <span className="text-xs text-gray-600">Consultation 4</span>
+        </div>
       </div>
       
       <div className="grid grid-cols-10 gap-2">
@@ -201,11 +272,11 @@ function TenDayFollowUpCalendar({ leads }: { leads: Lead[] }) {
               {(followUpMap[d.dateStr] || []).map((event, i) => (
                 <div 
                   key={i} 
-                  className={`rounded px-2 py-1 text-xs text-center w-full ${getEventColor(event.type)}`}
-                  title={`${event.name} - ${getEventLabel(event.type)}`}
+                  className={`rounded px-2 py-1 text-xs text-center w-full ${getEventColor(event.type as any)}`}
+                  title={`${event.name} - ${getEventLabel(event.type as any)}`}
                 >
                   <div className="font-medium">{event.name}</div>
-                  <div className="text-xs opacity-75">{getEventLabel(event.type)}</div>
+                  <div className="text-xs opacity-75">{getEventLabel(event.type as any)}</div>
                 </div>
               ))}
             </div>
@@ -229,4 +300,158 @@ function isTodayTR(dateStr?: string) {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   return dateStr === todayStr;
+}
+
+function ConsultationTracking({ leads }: { leads: Lead[] }) {
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  
+  // Get patients with consultations
+  const patientsWithConsultations = leads.filter(lead => 
+    lead.consultation1Date || lead.consultation2Date || lead.consultation3Date || lead.consultation4Date
+  );
+
+  // Get upcoming consultations (next 7 days)
+  const upcomingConsultations = patientsWithConsultations.filter(patient => {
+    const consultations = [
+      { date: patient.consultation1Date, status: patient.consultation1Status },
+      { date: patient.consultation2Date, status: patient.consultation2Status },
+      { date: patient.consultation3Date, status: patient.consultation3Status },
+      { date: patient.consultation4Date, status: patient.consultation4Status }
+    ];
+    
+    return consultations.some(consultation => {
+      if (!consultation.date) return false;
+      const consultationDate = new Date(consultation.date);
+      const diffTime = consultationDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays <= 7 && consultation.status !== 'completed';
+    });
+  });
+
+  // Get today's consultations
+  const todaysConsultations = patientsWithConsultations.filter(patient => {
+    const consultations = [
+      { date: patient.consultation1Date, status: patient.consultation1Status },
+      { date: patient.consultation2Date, status: patient.consultation2Status },
+      { date: patient.consultation3Date, status: patient.consultation3Status },
+      { date: patient.consultation4Date, status: patient.consultation4Status }
+    ];
+    
+    return consultations.some(consultation => {
+      if (!consultation.date) return false;
+      const consultationDate = new Date(consultation.date);
+      return consultationDate.toDateString() === today.toDateString() && consultation.status !== 'completed';
+    });
+  });
+
+  // Get completed consultations this month
+  const completedThisMonth = patientsWithConsultations.filter(patient => {
+    const consultations = [
+      { date: patient.consultation1Date, status: patient.consultation1Status },
+      { date: patient.consultation2Date, status: patient.consultation2Status },
+      { date: patient.consultation3Date, status: patient.consultation3Status },
+      { date: patient.consultation4Date, status: patient.consultation4Status }
+    ];
+    
+    return consultations.some(consultation => {
+      if (!consultation.date || consultation.status !== 'completed') return false;
+      const consultationDate = new Date(consultation.date);
+      return consultationDate.getMonth() === today.getMonth() && consultationDate.getFullYear() === today.getFullYear();
+    });
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <h3 className="text-sm font-medium text-blue-800">Today's Consultations</h3>
+          <p className="text-2xl font-bold text-blue-900">{todaysConsultations.length}</p>
+        </div>
+        <div className="bg-green-50 p-4 rounded-lg">
+          <h3 className="text-sm font-medium text-green-800">Upcoming (7 days)</h3>
+          <p className="text-2xl font-bold text-green-900">{upcomingConsultations.length}</p>
+        </div>
+        <div className="bg-purple-50 p-4 rounded-lg">
+          <h3 className="text-sm font-medium text-purple-800">Completed This Month</h3>
+          <p className="text-2xl font-bold text-purple-900">{completedThisMonth.length}</p>
+        </div>
+      </div>
+
+      {/* Today's Consultations */}
+      {todaysConsultations.length > 0 && (
+        <div>
+          <h3 className="text-md font-semibold text-gray-900 mb-3">Today's Consultations</h3>
+          <div className="space-y-2">
+            {todaysConsultations.map(patient => {
+              const consultations = [
+                { date: patient.consultation1Date, status: patient.consultation1Status, number: 1 },
+                { date: patient.consultation2Date, status: patient.consultation2Status, number: 2 },
+                { date: patient.consultation3Date, status: patient.consultation3Status, number: 3 },
+                { date: patient.consultation4Date, status: patient.consultation4Status, number: 4 }
+              ].filter(c => c.date && new Date(c.date).toDateString() === today.toDateString() && c.status !== 'completed');
+              
+              return consultations.map(consultation => (
+                <div key={`${patient._id}-${consultation.number}`} className="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-400">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-medium text-gray-900">{patient.firstName} {patient.lastName}</p>
+                      <p className="text-sm text-gray-600">Consultation {consultation.number}</p>
+                    </div>
+                    <span className="text-sm text-yellow-800 font-medium">TODAY</span>
+                  </div>
+                </div>
+              ));
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming Consultations */}
+      {upcomingConsultations.length > 0 && (
+        <div>
+          <h3 className="text-md font-semibold text-gray-900 mb-3">Upcoming Consultations</h3>
+          <div className="space-y-2">
+            {upcomingConsultations.slice(0, 5).map(patient => {
+              const consultations = [
+                { date: patient.consultation1Date, status: patient.consultation1Status, number: 1 },
+                { date: patient.consultation2Date, status: patient.consultation2Status, number: 2 },
+                { date: patient.consultation3Date, status: patient.consultation3Status, number: 3 },
+                { date: patient.consultation4Date, status: patient.consultation4Status, number: 4 }
+              ].filter(c => {
+                if (!c.date || c.status === 'completed') return false;
+                const consultationDate = new Date(c.date);
+                const diffTime = consultationDate.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays > 0 && diffDays <= 7;
+              });
+              
+              return consultations.map(consultation => {
+                const consultationDate = new Date(consultation.date!);
+                const diffTime = consultationDate.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                return (
+                  <div key={`${patient._id}-${consultation.number}`} className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-400">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-medium text-gray-900">{patient.firstName} {patient.lastName}</p>
+                        <p className="text-sm text-gray-600">
+                          Consultation {consultation.number} - {consultationDate.toLocaleDateString('tr-TR')}
+                        </p>
+                      </div>
+                      <span className="text-sm text-blue-800 font-medium">
+                        {diffDays === 1 ? 'Tomorrow' : `In ${diffDays} days`}
+                      </span>
+                    </div>
+                  </div>
+                );
+              });
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

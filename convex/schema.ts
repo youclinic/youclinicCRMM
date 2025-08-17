@@ -30,6 +30,15 @@ const applicationTables = {
     consultation1Date: v.optional(v.string()), // First consultation date
     consultation2Date: v.optional(v.string()), // Second consultation date
     consultation3Date: v.optional(v.string()), // Third consultation date
+    consultation4Date: v.optional(v.string()), // Fourth consultation date
+    consultation1Status: v.optional(v.union(v.literal("scheduled"), v.literal("completed"), v.literal("cancelled"), v.literal("no_show"))), // First consultation status
+    consultation2Status: v.optional(v.union(v.literal("scheduled"), v.literal("completed"), v.literal("cancelled"), v.literal("no_show"))), // Second consultation status
+    consultation3Status: v.optional(v.union(v.literal("scheduled"), v.literal("completed"), v.literal("cancelled"), v.literal("no_show"))), // Third consultation status
+    consultation4Status: v.optional(v.union(v.literal("scheduled"), v.literal("completed"), v.literal("cancelled"), v.literal("no_show"))), // Fourth consultation status
+    consultation1Notes: v.optional(v.string()), // First consultation notes
+    consultation2Notes: v.optional(v.string()), // Second consultation notes
+    consultation3Notes: v.optional(v.string()), // Third consultation notes
+    consultation4Notes: v.optional(v.string()), // Fourth consultation notes
     nextFollowUpDate: v.optional(v.string()), // Sıradaki follow-up tarihi
     followUpCount: v.optional(v.number()), // Kaçıncı follow-up'ta olduğu
     arrivalDate: v.optional(v.string()), // Türkiye'ye geliş tarihi
@@ -52,7 +61,23 @@ const applicationTables = {
     authId: v.optional(v.string()),
     role: v.optional(v.string()),
     isAnonymous: v.optional(v.boolean()),
+    phone: v.optional(v.string()),
   }).index("by_authId", ["authId"]),
+  calendarEvents: defineTable({
+    userId: v.id("users"), // Etkinliği oluşturan satışçı
+    title: v.string(), // Etkinlik başlığı (örn: "Maryam'ı Ara")
+    description: v.optional(v.string()), // Etkinlik açıklaması
+    eventDate: v.string(), // Etkinlik tarihi (YYYY-MM-DD formatında)
+    eventTime: v.optional(v.string()), // Etkinlik saati (HH:MM formatında)
+    isCompleted: v.boolean(), // Etkinlik tamamlandı mı?
+    priority: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))), // Öncelik seviyesi
+    createdAt: v.number(), // Oluşturulma zamanı
+    updatedAt: v.number(), // Güncellenme zamanı
+  })
+    .index("by_user", ["userId"])
+    .index("by_date", ["eventDate"])
+    .index("by_user_and_date", ["userId", "eventDate"])
+    .index("by_user_and_completed", ["userId", "isCompleted"]),
   patientTransfers: defineTable({
     patientId: v.id("leads"),
     fromUserId: v.id("users"),
@@ -83,6 +108,27 @@ const applicationTables = {
     .index("by_user", ["userId"])
     .index("by_transfer", ["transferId"])
     .index("by_created_at", ["createdAt"]),
+  proformaInvoices: defineTable({
+    patientId: v.id("leads"),
+    createdBy: v.id("users"),
+    invoiceNumber: v.string(),
+    invoiceDate: v.string(), // YYYY-MM-DD formatında
+    items: v.array(v.object({
+      description: v.string(),
+      amount: v.number(),
+    })),
+    total: v.number(),
+    deposit: v.number(),
+    remaining: v.number(),
+    currency: v.optional(v.string()), // USD, EUR, TRY, etc.
+    salespersonPhone: v.string(),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_patient", ["patientId"])
+    .index("by_created_by", ["createdBy"])
+    .index("by_date", ["invoiceDate"]),
 };
 
 export default defineSchema({

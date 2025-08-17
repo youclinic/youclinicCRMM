@@ -369,7 +369,13 @@ export function LeadsTab() {
           <div>
             <p className="font-medium">{file.fileName}</p>
             <p className="text-sm text-gray-500">
-              {new Date(file.uploadedAt).toLocaleDateString('tr-TR')}
+              {(() => {
+                try {
+                  return new Date(file.uploadedAt).toLocaleDateString('tr-TR');
+                } catch (error) {
+                  return 'Invalid Date';
+                }
+              })()}
             </p>
           </div>
         </div>
