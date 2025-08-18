@@ -471,22 +471,40 @@ export function PatientsTab() {
   if (searchTerm.trim() !== "") {
     // Use search results from backend
     if (searchResults) {
-      patients = searchResults;
-      totalCount = searchResults.length;
+      let filteredPatients = searchResults;
+      
+      // Apply additional filters (status and treatment type)
+      if (statusFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.status === statusFilter);
+      if (treatmentFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.treatmentType === treatmentFilter);
+      
+      patients = filteredPatients;
+      totalCount = filteredPatients.length;
       filterType = "search";
     }
   } else if (followUpDateFilter) {
     // Use follow-up date filter results from backend
     if (followUpDateResults) {
-      patients = followUpDateResults.page;
-      totalCount = followUpDateResults.page.length;
+      let filteredPatients = followUpDateResults.page;
+      
+      // Apply additional filters (status and treatment type)
+      if (statusFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.status === statusFilter);
+      if (treatmentFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.treatmentType === treatmentFilter);
+      
+      patients = filteredPatients;
+      totalCount = filteredPatients.length;
       filterType = "followUpDate";
     }
   } else if (followUpStart || followUpEnd) {
     // Use follow-up date range filter results from backend
     if (followUpDateRangeResults) {
-      patients = followUpDateRangeResults.page;
-      totalCount = followUpDateRangeResults.page.length;
+      let filteredPatients = followUpDateRangeResults.page;
+      
+      // Apply additional filters (status and treatment type)
+      if (statusFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.status === statusFilter);
+      if (treatmentFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.treatmentType === treatmentFilter);
+      
+      patients = filteredPatients;
+      totalCount = filteredPatients.length;
       filterType = "followUpDateRange";
     }
   } else {
@@ -513,6 +531,11 @@ export function PatientsTab() {
                {filterType === "followUpDate" && `Follow-up date filter: ${totalCount} patients found for ${format(followUpDateFilter!, 'dd/MM/yyyy')}`}
                {filterType === "followUpDateRange" && `Follow-up date range filter: ${totalCount} patients found`}
                {filterType === "normal" && `Toplam ${totalCount} hasta listeleniyor`}
+               {(statusFilter || treatmentFilter) && (
+                 <div className="text-xs text-gray-500 mt-1">
+                   Additional filters: {statusFilter && `Status: ${statusFilter}`} {statusFilter && treatmentFilter && " | "} {treatmentFilter && `Treatment: ${treatmentFilter}`}
+                 </div>
+               )}
              </div>
 
       {/* Sold Modal */}
@@ -985,6 +1008,17 @@ export function PatientsTab() {
            {filterType === "normal" && leadsResult && leadsResult.isDone && patients.length > 0 && (
              <div className="mt-6 text-center">
                <p className="text-gray-500 text-sm">All patients loaded</p>
+               {(statusFilter || treatmentFilter) && (
+                 <button
+                   onClick={() => {
+                     setStatusFilter("");
+                     setTreatmentFilter("");
+                   }}
+                   className="mt-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+                 >
+                   Clear Additional Filters
+                 </button>
+               )}
              </div>
            )}
 
@@ -992,14 +1026,27 @@ export function PatientsTab() {
            {filterType === "search" && searchResults && (
              <div className="mt-6 text-center">
                <p className="text-blue-600 text-sm font-medium">
-                 Found {searchResults.length} patients matching "{searchTerm}"
+                 Found {totalCount} patients matching "{searchTerm}"
                </p>
-               <button
-                 onClick={() => setSearchTerm("")}
-                 className="mt-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
-               >
-                 Clear Search
-               </button>
+               <div className="flex justify-center gap-2 mt-2">
+                 <button
+                   onClick={() => setSearchTerm("")}
+                   className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+                 >
+                   Clear Search
+                 </button>
+                 {(statusFilter || treatmentFilter) && (
+                   <button
+                     onClick={() => {
+                       setStatusFilter("");
+                       setTreatmentFilter("");
+                     }}
+                     className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+                   >
+                     Clear Additional Filters
+                   </button>
+                 )}
+               </div>
              </div>
            )}
 
@@ -1007,14 +1054,27 @@ export function PatientsTab() {
            {filterType === "followUpDate" && followUpDateResults && (
              <div className="mt-6 text-center">
                <p className="text-green-600 text-sm font-medium">
-                 Found {followUpDateResults.page.length} patients with follow-up on {format(followUpDateFilter!, 'dd/MM/yyyy')}
+                 Found {totalCount} patients with follow-up on {format(followUpDateFilter!, 'dd/MM/yyyy')}
                </p>
-               <button
-                 onClick={() => setFollowUpDateFilter(null)}
-                 className="mt-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
-               >
-                 Clear Date Filter
-               </button>
+               <div className="flex justify-center gap-2 mt-2">
+                 <button
+                   onClick={() => setFollowUpDateFilter(null)}
+                   className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+                 >
+                   Clear Date Filter
+                 </button>
+                 {(statusFilter || treatmentFilter) && (
+                   <button
+                     onClick={() => {
+                       setStatusFilter("");
+                       setTreatmentFilter("");
+                     }}
+                     className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+                   >
+                     Clear Additional Filters
+                   </button>
+                 )}
+               </div>
              </div>
            )}
 
@@ -1022,17 +1082,30 @@ export function PatientsTab() {
            {filterType === "followUpDateRange" && followUpDateRangeResults && (
              <div className="mt-6 text-center">
                <p className="text-green-600 text-sm font-medium">
-                 Found {followUpDateRangeResults.page.length} patients with follow-up between {followUpStart && format(followUpStart, 'dd/MM/yyyy')} and {followUpEnd && format(followUpEnd, 'dd/MM/yyyy')}
+                 Found {totalCount} patients with follow-up between {followUpStart && format(followUpStart, 'dd/MM/yyyy')} and {followUpEnd && format(followUpEnd, 'dd/MM/yyyy')}
                </p>
-               <button
-                 onClick={() => {
-                   setFollowUpStart(null);
-                   setFollowUpEnd(null);
-                 }}
-                 className="mt-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
-               >
-                 Clear Date Range Filter
-               </button>
+               <div className="flex justify-center gap-2 mt-2">
+                 <button
+                   onClick={() => {
+                     setFollowUpStart(null);
+                     setFollowUpEnd(null);
+                   }}
+                   className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+                 >
+                   Clear Date Range Filter
+                 </button>
+                 {(statusFilter || treatmentFilter) && (
+                   <button
+                     onClick={() => {
+                       setStatusFilter("");
+                       setTreatmentFilter("");
+                     }}
+                     className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
+                   >
+                     Clear Additional Filters
+                   </button>
+                 )}
+               </div>
              </div>
            )}
           {patients.length === 0 && (

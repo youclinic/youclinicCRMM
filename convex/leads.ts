@@ -454,10 +454,84 @@ export const searchLeads = query({
     if (!userDoc) throw new Error("User not found");
     const q = args.query.trim().toLowerCase();
     if (!q) return [];
-    // Herkes tüm hastaları arayabilsin (treatment_done hariç)
+    
+    // Role-based access control for search
+    let allLeads;
+    if (userDoc.role === "admin") {
+      // Admins can search all patients (except treatment_done)
+      allLeads = await ctx.db.query("leads")
+        .filter(q => q.neq(q.field("status"), "treatment_done"))
+        .collect();
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons can only search their assigned patients (except treatment_done)
+      allLeads = await ctx.db.query("leads")
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.neq(q.field("status"), "treatment_done")
+          )
+        )
+        .collect();
+    } else {
+      throw new Error("Invalid user role");
+    }
+    
+    // Normalize fonksiyonu: harfleri küçült, boşluk ve özel karakterleri kaldır
+    const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ\s]/gi, "").replace(/\s+/g, "");
+    const normalizedQ = normalize(q);
+    return allLeads
+      .filter(lead => {
+        const firstName = lead.firstName ? normalize(lead.firstName) : "";
+        const lastName = lead.lastName ? normalize(lead.lastName) : "";
+        const fullName = (lead.firstName && lead.lastName) ? normalize(lead.firstName + lead.lastName) : "";
+        const email = lead.email ? normalize(lead.email) : "";
+        const country = lead.country ? normalize(lead.country) : "";
+        const phone = lead.phone ? lead.phone.replace(/\D/g, "") : "";
+        const qDigits = normalizedQ.replace(/\D/g, "");
+        return (
+          firstName.includes(normalizedQ) ||
+          lastName.includes(normalizedQ) ||
+          fullName.includes(normalizedQ) ||
+          email.includes(normalizedQ) ||
+          country.includes(normalizedQ) ||
+          (phone && qDigits && phone.includes(qDigits))
+        );
+      })
+      .map(lead => ({
+        _id: lead._id,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email,
+        phone: lead.phone,
+        status: lead.status,
+        treatmentType: lead.treatmentType,
+        country: lead.country,
+        assignedTo: lead.assignedTo,
+        salesPerson: lead.salesPerson,
+        nextFollowUpDate: lead.nextFollowUpDate,
+        followUpCount: lead.followUpCount,
+        files: lead.files,
+        createdAt: lead.createdAt,
+      }));
+  },
+});
+
+// Global search function for sidebar - allows searching all patients but with restricted view in modal
+export const globalSearchLeads = query({
+  args: { query: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    const userDoc = await ctx.db.get(userId);
+    if (!userDoc) throw new Error("User not found");
+    const q = args.query.trim().toLowerCase();
+    if (!q) return [];
+    
+    // Global search - everyone can search all patients (except treatment_done)
     const allLeads = await ctx.db.query("leads")
       .filter(q => q.neq(q.field("status"), "treatment_done"))
       .collect();
+    
     // Normalize fonksiyonu: harfleri küçült, boşluk ve özel karakterleri kaldır
     const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ\s]/gi, "").replace(/\s+/g, "");
     const normalizedQ = normalize(q);

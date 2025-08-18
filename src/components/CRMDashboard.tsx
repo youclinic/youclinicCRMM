@@ -63,7 +63,7 @@ export function CRMDashboard() {
   const [search, setSearch] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [selectedPatientId, setSelectedPatientId] = useState<Id<"leads"> | null>(null);
-  const searchResults = useQuery(api.leads.searchLeads, search.trim() ? { query: search } : "skip");
+  const searchResults = useQuery(api.leads.globalSearchLeads, search.trim() ? { query: search } : "skip");
 
   return (
     <div className="flex h-screen bg-gray-50">
