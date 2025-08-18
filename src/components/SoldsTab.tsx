@@ -8,7 +8,7 @@ import { PatientProfileModal } from "./PatientProfileModal";
 export function SoldsTab() {
   // Pagination state for converted patients
   const [paginationOpts, setPaginationOpts] = useState({
-    numItems: 1000,
+    numItems: 50,
     cursor: null as string | null,
   });
 

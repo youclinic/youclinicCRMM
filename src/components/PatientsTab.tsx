@@ -20,7 +20,20 @@ export function PatientsTab() {
   const [allPatients, setAllPatients] = useState<any[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const leadsResult = useQuery(api.leads.getAllPatients, { paginationOpts });
+  // Filter states - moved up before query
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [treatmentFilter, setTreatmentFilter] = useState<string>("");
+  const [followUpStart, setFollowUpStart] = useState<Date | null>(null);
+  const [followUpEnd, setFollowUpEnd] = useState<Date | null>(null);
+  const [followUpDateFilter, setFollowUpDateFilter] = useState<Date | null>(null);
+  const [showFollowUpDatePicker, setShowFollowUpDatePicker] = useState(false);
+  const [openDatePickerId, setOpenDatePickerId] = useState<Id<"leads"> | null>(null);
+
+  const leadsResult = useQuery(api.leads.getAllPatients, { 
+    paginationOpts,
+    statusFilter: statusFilter || undefined,
+    treatmentFilter: treatmentFilter || undefined,
+  });
   const currentUser = useQuery(api.auth.loggedInUser);
   const updateLead = useMutation(api.leads.update);
   const deleteLead = useMutation(api.leads.remove);
@@ -50,15 +63,6 @@ export function PatientsTab() {
     consultation3Date: "",
   });
 
-  // Filter states
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [treatmentFilter, setTreatmentFilter] = useState<string>("");
-  const [followUpStart, setFollowUpStart] = useState<Date | null>(null);
-  const [followUpEnd, setFollowUpEnd] = useState<Date | null>(null);
-  const [followUpDateFilter, setFollowUpDateFilter] = useState<Date | null>(null);
-  const [showFollowUpDatePicker, setShowFollowUpDatePicker] = useState(false);
-  const [openDatePickerId, setOpenDatePickerId] = useState<Id<"leads"> | null>(null);
-  
   // Update allPatients when new data comes in
   React.useEffect(() => {
     if (leadsResult?.page) {
@@ -73,6 +77,11 @@ export function PatientsTab() {
       setIsLoadingMore(false);
     }
   }, [leadsResult?.page, paginationOpts.cursor]);
+
+  // Reset pagination when filters change
+  React.useEffect(() => {
+    resetPagination();
+  }, [statusFilter, treatmentFilter]);
   
   // Pagination handlers
   const loadMore = () => {
@@ -471,52 +480,28 @@ export function PatientsTab() {
   if (searchTerm.trim() !== "") {
     // Use search results from backend
     if (searchResults) {
-      let filteredPatients = searchResults;
-      
-      // Apply additional filters (status and treatment type)
-      if (statusFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.status === statusFilter);
-      if (treatmentFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.treatmentType === treatmentFilter);
-      
-      patients = filteredPatients;
-      totalCount = filteredPatients.length;
+      patients = searchResults;
+      totalCount = searchResults.length;
       filterType = "search";
     }
   } else if (followUpDateFilter) {
     // Use follow-up date filter results from backend
     if (followUpDateResults) {
-      let filteredPatients = followUpDateResults.page;
-      
-      // Apply additional filters (status and treatment type)
-      if (statusFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.status === statusFilter);
-      if (treatmentFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.treatmentType === treatmentFilter);
-      
-      patients = filteredPatients;
-      totalCount = filteredPatients.length;
+      patients = followUpDateResults.page;
+      totalCount = followUpDateResults.page.length;
       filterType = "followUpDate";
     }
   } else if (followUpStart || followUpEnd) {
     // Use follow-up date range filter results from backend
     if (followUpDateRangeResults) {
-      let filteredPatients = followUpDateRangeResults.page;
-      
-      // Apply additional filters (status and treatment type)
-      if (statusFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.status === statusFilter);
-      if (treatmentFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.treatmentType === treatmentFilter);
-      
-      patients = filteredPatients;
-      totalCount = filteredPatients.length;
+      patients = followUpDateRangeResults.page;
+      totalCount = followUpDateRangeResults.page.length;
       filterType = "followUpDateRange";
     }
   } else {
-    // Use normal pagination results
-    let filteredPatients = allPatients;
-    
-    // Apply remaining filters (status and treatment type)
-    if (statusFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.status === statusFilter);
-    if (treatmentFilter) filteredPatients = filteredPatients.filter((lead: any) => lead.treatmentType === treatmentFilter);
-    
-    patients = filteredPatients;
-    totalCount = filteredPatients.length;
+    // Use normal pagination results (backend already applies status and treatment filters)
+    patients = allPatients;
+    totalCount = allPatients.length;
     filterType = "normal";
   }
 
@@ -704,7 +689,6 @@ export function PatientsTab() {
             <option value="dead">EWS</option>
             <option value="no_communication">No Communication</option>
             <option value="no_interest">No interest</option>
-            <option value="sold">Sold</option>
           </select>
         </div>
         <div className="flex flex-col">

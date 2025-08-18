@@ -54,7 +54,12 @@ const applicationTables = {
     .index("by_assigned", ["assignedTo"])
     .index("by_salesperson", ["salesPerson"])
     .index("by_nextFollowUpDate", ["nextFollowUpDate"])
-    .index("by_arrivalDate", ["arrivalDate"]),
+    .index("by_arrivalDate", ["arrivalDate"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_assignedTo_and_status", ["assignedTo", "status"])
+    .index("by_status_and_createdAt", ["status", "createdAt"])
+    .index("by_assignedTo_and_status_and_createdAt", ["assignedTo", "status", "createdAt"])
+    .index("by_phone", ["phone"]),
   users: defineTable({
     name: v.optional(v.string()),
     email: v.optional(v.string()),

@@ -27,7 +27,7 @@ export function MarketingTab() {
 
   // Pagination state for leads
   const [paginationOpts, setPaginationOpts] = useState({
-    numItems: 1000, // Marketing için daha fazla lead çekelim
+    numItems: 50, // Marketing için daha fazla lead çekelim
     cursor: null as string | null,
   });
 

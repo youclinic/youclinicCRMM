@@ -17,9 +17,10 @@ export const list = query({
     const userDoc = await ctx.db.get(userId);
     if (!userDoc) throw new Error("User not found");
 
+    let result;
     if (userDoc.role === "admin") {
       // Admins see only new leads (new and new_lead status)
-      return await ctx.db
+      result = await ctx.db
         .query("leads")
         .filter(q => 
           q.or(
@@ -31,7 +32,7 @@ export const list = query({
         .paginate(args.paginationOpts);
     } else if (userDoc.role === "salesperson") {
       // Salespersons see only their assigned new leads (new and new_lead status)
-      return await ctx.db
+      result = await ctx.db
         .query("leads")
         .filter(q => 
           q.and(
@@ -47,6 +48,27 @@ export const list = query({
     } else {
       throw new Error("Invalid user role");
     }
+
+    // Select only necessary fields to reduce bandwidth
+    return {
+      page: result.page.map(lead => ({
+        _id: lead._id,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email,
+        phone: lead.phone,
+        status: lead.status,
+        treatmentType: lead.treatmentType,
+        createdAt: lead.createdAt,
+        assignedTo: lead.assignedTo,
+        salesPerson: lead.salesPerson,
+        nextFollowUpDate: lead.nextFollowUpDate,
+        followUpCount: lead.followUpCount,
+        files: lead.files,
+      })),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
   },
 });
 
@@ -96,9 +118,46 @@ export const getConverted = query({
       throw new Error("Invalid user role");
     }
 
-    // Separate sold and converted leads
-    const sold = leads.page.filter(lead => lead.status === "sold");
-    const converted = leads.page.filter(lead => lead.status === "converted");
+    // Select only necessary fields and separate sold and converted leads
+    const sold = leads.page
+      .filter(lead => lead.status === "sold")
+      .map(lead => ({
+        _id: lead._id,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email,
+        phone: lead.phone,
+        status: lead.status,
+        treatmentType: lead.treatmentType,
+        createdAt: lead.createdAt,
+        assignedTo: lead.assignedTo,
+        salesPerson: lead.salesPerson,
+        saleDate: lead.saleDate,
+        price: lead.price,
+        deposit: lead.deposit,
+        currency: lead.currency,
+        arrivalDate: lead.arrivalDate,
+      }));
+
+    const converted = leads.page
+      .filter(lead => lead.status === "converted")
+      .map(lead => ({
+        _id: lead._id,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email,
+        phone: lead.phone,
+        status: lead.status,
+        treatmentType: lead.treatmentType,
+        createdAt: lead.createdAt,
+        assignedTo: lead.assignedTo,
+        salesPerson: lead.salesPerson,
+        saleDate: lead.saleDate,
+        price: lead.price,
+        deposit: lead.deposit,
+        currency: lead.currency,
+        arrivalDate: lead.arrivalDate,
+      }));
 
     return {
       sold,
@@ -124,15 +183,16 @@ export const getTreatmentDone = query({
     const userDoc = await ctx.db.get(userId);
     if (!userDoc) throw new Error("User not found");
 
+    let result;
     if (userDoc.role === "admin") {
       // Admins see all aftercare patients
-      return await ctx.db.query("leads")
+      result = await ctx.db.query("leads")
         .withIndex("by_status", (q) => q.eq("status", "treatment_done"))
         .order("desc")
         .paginate(args.paginationOpts);
     } else if (userDoc.role === "salesperson") {
       // Salespersons see only their assigned aftercare patients
-      return await ctx.db.query("leads")
+      result = await ctx.db.query("leads")
         .withIndex("by_status", (q) => q.eq("status", "treatment_done"))
         .filter(q => q.eq(q.field("assignedTo"), userId))
         .order("desc")
@@ -140,6 +200,36 @@ export const getTreatmentDone = query({
     } else {
       throw new Error("Invalid user role");
     }
+
+    // Select only necessary fields for aftercare patients
+    return {
+      page: result.page.map(lead => ({
+        _id: lead._id,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email,
+        phone: lead.phone,
+        status: lead.status,
+        treatmentType: lead.treatmentType,
+        createdAt: lead.createdAt,
+        assignedTo: lead.assignedTo,
+        salesPerson: lead.salesPerson,
+        consultation1Date: lead.consultation1Date,
+        consultation2Date: lead.consultation2Date,
+        consultation3Date: lead.consultation3Date,
+        consultation4Date: lead.consultation4Date,
+        consultation1Status: lead.consultation1Status,
+        consultation2Status: lead.consultation2Status,
+        consultation3Status: lead.consultation3Status,
+        consultation4Status: lead.consultation4Status,
+        consultation1Notes: lead.consultation1Notes,
+        consultation2Notes: lead.consultation2Notes,
+        consultation3Notes: lead.consultation3Notes,
+        consultation4Notes: lead.consultation4Notes,
+      })),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
   },
 });
 
@@ -190,7 +280,7 @@ export const create = mutation({
     // Aynı telefon numarasına sahip bir lead var mı kontrol et
     const existingLead = await ctx.db
       .query("leads")
-      .filter(q => q.eq(q.field("phone"), args.phone))
+      .withIndex("by_phone", q => q.eq("phone", args.phone))
       .first();
     if (existingLead) {
       throw new Error(`Bu telefon numarasına (${args.phone}) ait bir lead zaten mevcut. Lütfen farklı bir telefon numarası kullanın veya mevcut lead'i düzenleyin.`);
@@ -410,11 +500,15 @@ export const getStats = query({
 
     let leads;
     if (userDoc.role === "admin") {
+      // Use status index for better performance
       leads = await ctx.db.query("leads")
+        .withIndex("by_status")
         .filter(q => q.neq(q.field("status"), "treatment_done"))
         .collect();
     } else if (userDoc.role === "salesperson") {
+      // Use composite index for better performance
       leads = await ctx.db.query("leads")
+        .withIndex("by_assignedTo_and_status")
         .filter(q => 
           q.and(
             q.eq(q.field("assignedTo"), userId),
@@ -459,12 +553,16 @@ export const searchLeads = query({
     let allLeads;
     if (userDoc.role === "admin") {
       // Admins can search all patients (except treatment_done)
+      // Use status index for better performance
       allLeads = await ctx.db.query("leads")
+        .withIndex("by_status")
         .filter(q => q.neq(q.field("status"), "treatment_done"))
         .collect();
     } else if (userDoc.role === "salesperson") {
       // Salespersons can only search their assigned patients (except treatment_done)
+      // Use composite index for better performance
       allLeads = await ctx.db.query("leads")
+        .withIndex("by_assignedTo_and_status")
         .filter(q => 
           q.and(
             q.eq(q.field("assignedTo"), userId),
@@ -1049,7 +1147,9 @@ export const getPatientsByFollowUpDateRange = query({
 // Get all patients (not just new leads) for Patients tab
 export const getAllPatients = query({
   args: { 
-    paginationOpts: paginationOptsValidator 
+    paginationOpts: paginationOptsValidator,
+    statusFilter: v.optional(v.string()),
+    treatmentFilter: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -1061,36 +1161,84 @@ export const getAllPatients = query({
     const userDoc = await ctx.db.get(userId);
     if (!userDoc) throw new Error("User not found");
 
+    let result;
     if (userDoc.role === "admin") {
-      // Admins see all patients except new leads and treatment_done
-      return await ctx.db
+      // Admins see all patients except new leads, sold, and treatment_done
+      // Use status index for better performance
+      let query = ctx.db
         .query("leads")
+        .withIndex("by_status")
         .filter(q => 
           q.and(
             q.neq(q.field("status"), "treatment_done"),
             q.neq(q.field("status"), "new"),
-            q.neq(q.field("status"), "new_lead")
+            q.neq(q.field("status"), "new_lead"),
+            q.neq(q.field("status"), "sold")
           )
-        )
-        .order("desc")
-        .paginate(args.paginationOpts);
+        );
+      
+      // Apply status filter if provided
+      if (args.statusFilter && args.statusFilter !== "") {
+        query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
+      }
+      
+      // Apply treatment filter if provided
+      if (args.treatmentFilter && args.treatmentFilter !== "") {
+        query = query.filter(q => q.eq(q.field("treatmentType"), args.treatmentFilter));
+      }
+      
+      result = await query.order("desc").paginate(args.paginationOpts);
     } else if (userDoc.role === "salesperson") {
-      // Salespersons see only their assigned patients except new leads and treatment_done
-      return await ctx.db
+      // Salespersons see only their assigned patients except new leads, sold, and treatment_done
+      // Use composite index for better performance
+      let query = ctx.db
         .query("leads")
+        .withIndex("by_assignedTo_and_status")
         .filter(q => 
           q.and(
             q.eq(q.field("assignedTo"), userId),
             q.neq(q.field("status"), "treatment_done"),
             q.neq(q.field("status"), "new"),
-            q.neq(q.field("status"), "new_lead")
+            q.neq(q.field("status"), "new_lead"),
+            q.neq(q.field("status"), "sold")
           )
-        )
-        .order("desc")
-        .paginate(args.paginationOpts);
+        );
+      
+      // Apply status filter if provided
+      if (args.statusFilter && args.statusFilter !== "") {
+        query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
+      }
+      
+      // Apply treatment filter if provided
+      if (args.treatmentFilter && args.treatmentFilter !== "") {
+        query = query.filter(q => q.eq(q.field("treatmentType"), args.treatmentFilter));
+      }
+      
+      result = await query.order("desc").paginate(args.paginationOpts);
     } else {
       throw new Error("Invalid user role");
     }
+
+    // Select only necessary fields to reduce bandwidth
+    return {
+      page: result.page.map(lead => ({
+        _id: lead._id,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email,
+        phone: lead.phone,
+        status: lead.status,
+        treatmentType: lead.treatmentType,
+        createdAt: lead.createdAt,
+        assignedTo: lead.assignedTo,
+        salesPerson: lead.salesPerson,
+        nextFollowUpDate: lead.nextFollowUpDate,
+        followUpCount: lead.followUpCount,
+        files: lead.files,
+      })),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
   },
 });
 
@@ -1109,17 +1257,22 @@ export const getAllLeadsForMarketing = query({
     const userDoc = await ctx.db.get(userId);
     if (!userDoc) throw new Error("User not found");
 
+    let result;
     if (userDoc.role === "admin") {
       // Admins see all leads except treatment_done
-      return await ctx.db
+      // Use status index for better performance
+      result = await ctx.db
         .query("leads")
+        .withIndex("by_status")
         .filter(q => q.neq(q.field("status"), "treatment_done"))
         .order("desc")
         .paginate(args.paginationOpts);
     } else if (userDoc.role === "salesperson") {
       // Salespersons see only their assigned leads except treatment_done
-      return await ctx.db
+      // Use composite index for better performance
+      result = await ctx.db
         .query("leads")
+        .withIndex("by_assignedTo_and_status")
         .filter(q => 
           q.and(
             q.eq(q.field("assignedTo"), userId),
@@ -1131,5 +1284,26 @@ export const getAllLeadsForMarketing = query({
     } else {
       throw new Error("Invalid user role");
     }
+
+    // Select only necessary fields for marketing analysis
+    return {
+      page: result.page.map(lead => ({
+        _id: lead._id,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email,
+        phone: lead.phone,
+        status: lead.status,
+        treatmentType: lead.treatmentType,
+        country: lead.country,
+        source: lead.source,
+        adName: lead.adName,
+        createdAt: lead.createdAt,
+        assignedTo: lead.assignedTo,
+        salesPerson: lead.salesPerson,
+      })),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
   },
 });

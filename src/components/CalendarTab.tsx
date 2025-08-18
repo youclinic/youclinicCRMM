@@ -34,7 +34,7 @@ export function CalendarTab() {
 
   // Pagination state
   const [paginationOpts, setPaginationOpts] = useState({
-    numItems: 100,
+    numItems: 50,
     cursor: null as string | null,
   });
 
@@ -93,7 +93,7 @@ export function CalendarTab() {
   const resetPagination = () => {
     setAllEvents([]);
     setPaginationOpts({
-      numItems: 100,
+      numItems: 50,
       cursor: null,
     });
   };
