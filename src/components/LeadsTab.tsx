@@ -872,6 +872,9 @@ export function LeadsTab() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Treatment
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Source
+                </th>
                 {currentUser?.role === "admin" && (
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
@@ -901,6 +904,9 @@ export function LeadsTab() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {lead.treatmentType}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {lead.source || "Not set"}
                   </td>
                   {canViewSensitiveInfo(lead) && (
                     <td className="px-6 py-4 whitespace-nowrap">

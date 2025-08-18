@@ -9,7 +9,7 @@ const http = httpRouter();
 export const importLead = internalMutation({
   args: {
     fullName: v.string(),
-    phone: v.string(),
+    phone: v.union(v.string(), v.number()),
     email: v.string(),
     assignedTo: v.id("users"),
     salesPerson: v.string(),
@@ -31,17 +31,24 @@ export const importLead = internalMutation({
     
     const [firstName, ...rest] = (args.fullName || "").split(" ");
     const lastName = rest.join(" ");
+    
+    // Phone'u string'e çevir
+    const phoneStr = String(args.phone);
+    
+    // Notes alanını kullan (Google Apps Script'ten gelecek)
+    let notes = args.notes || "";
+    
     await ctx.db.insert("leads", {
       firstName,
       lastName,
-      phone: args.phone,
+      phone: phoneStr,
       email: args.email || "",
       country: "",
       treatmentType: "",
       budget: undefined,
       source: "advertisement",
       adName: args.adName || "",
-      notes: args.notes || "",
+      notes: notes,
       preferredDate: "",
       medicalHistory: "",
       salesPerson: args.salesPerson,
