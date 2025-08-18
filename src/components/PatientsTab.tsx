@@ -12,7 +12,7 @@ import React from "react";
 
 export function PatientsTab() {
   const [paginationOpts, setPaginationOpts] = useState({
-    numItems: 20,
+    numItems: 50, // Performans için artırıldı
     cursor: null as string | null,
   });
 
@@ -29,10 +29,18 @@ export function PatientsTab() {
   const [showFollowUpDatePicker, setShowFollowUpDatePicker] = useState(false);
   const [openDatePickerId, setOpenDatePickerId] = useState<Id<"leads"> | null>(null);
 
+  // Prepare follow-up date filters
+  const followUpDate = followUpDateFilter ? format(followUpDateFilter, 'yyyy-MM-dd') : undefined;
+  const followUpStartDate = followUpStart && followUpEnd ? format(followUpStart, 'yyyy-MM-dd') : undefined;
+  const followUpEndDate = followUpStart && followUpEnd ? format(followUpEnd, 'yyyy-MM-dd') : undefined;
+
   const leadsResult = useQuery(api.leads.getAllPatients, { 
     paginationOpts,
     statusFilter: statusFilter || undefined,
     treatmentFilter: treatmentFilter || undefined,
+    followUpDate,
+    followUpStartDate,
+    followUpEndDate,
   });
   const currentUser = useQuery(api.auth.loggedInUser);
   const updateLead = useMutation(api.leads.update);
@@ -81,7 +89,7 @@ export function PatientsTab() {
   // Reset pagination when filters change
   React.useEffect(() => {
     resetPagination();
-  }, [statusFilter, treatmentFilter]);
+  }, [statusFilter, treatmentFilter, followUpDateFilter, followUpStart, followUpEnd]);
   
   // Pagination handlers
   const loadMore = () => {
@@ -145,24 +153,7 @@ export function PatientsTab() {
     searchTerm.trim() ? { query: searchTerm } : "skip"
   );
 
-  // Use backend filtering for follow-up date
-  const followUpDateResults = useQuery(
-    api.leads.getPatientsByFollowUpDate,
-    followUpDateFilter ? { 
-      followUpDate: format(followUpDateFilter, 'yyyy-MM-dd'),
-      paginationOpts: { numItems: 10000, cursor: null }
-    } : "skip"
-  );
 
-  // Use backend filtering for follow-up date range
-  const followUpDateRangeResults = useQuery(
-    api.leads.getPatientsByFollowUpDateRange,
-    (followUpStart || followUpEnd) ? { 
-      startDate: followUpStart ? format(followUpStart, 'yyyy-MM-dd') : "1900-01-01",
-      endDate: followUpEnd ? format(followUpEnd, 'yyyy-MM-dd') : "2100-12-31",
-      paginationOpts: { numItems: 10000, cursor: null }
-    } : "skip"
-  );
 
   // Check if current user can view sensitive information for a specific lead
   const canViewSensitiveInfo = (lead: any) => {
@@ -484,22 +475,8 @@ export function PatientsTab() {
       totalCount = searchResults.length;
       filterType = "search";
     }
-  } else if (followUpDateFilter) {
-    // Use follow-up date filter results from backend
-    if (followUpDateResults) {
-      patients = followUpDateResults.page;
-      totalCount = followUpDateResults.page.length;
-      filterType = "followUpDate";
-    }
-  } else if (followUpStart || followUpEnd) {
-    // Use follow-up date range filter results from backend
-    if (followUpDateRangeResults) {
-      patients = followUpDateRangeResults.page;
-      totalCount = followUpDateRangeResults.page.length;
-      filterType = "followUpDateRange";
-    }
   } else {
-    // Use normal pagination results (backend already applies status and treatment filters)
+    // Use unified getAllPatients function for all filters (including follow-up dates)
     patients = allPatients;
     totalCount = allPatients.length;
     filterType = "normal";
@@ -513,12 +490,10 @@ export function PatientsTab() {
 
              <div className="mb-2 text-sm text-gray-700 font-semibold">
                {filterType === "search" && `Search results: ${totalCount} patients found`}
-               {filterType === "followUpDate" && `Follow-up date filter: ${totalCount} patients found for ${format(followUpDateFilter!, 'dd/MM/yyyy')}`}
-               {filterType === "followUpDateRange" && `Follow-up date range filter: ${totalCount} patients found`}
                {filterType === "normal" && `Toplam ${totalCount} hasta listeleniyor`}
-               {(statusFilter || treatmentFilter) && (
+               {(statusFilter || treatmentFilter || followUpDateFilter || followUpStart || followUpEnd) && (
                  <div className="text-xs text-gray-500 mt-1">
-                   Additional filters: {statusFilter && `Status: ${statusFilter}`} {statusFilter && treatmentFilter && " | "} {treatmentFilter && `Treatment: ${treatmentFilter}`}
+                   Filters: {statusFilter && `Status: ${statusFilter}`} {statusFilter && (treatmentFilter || followUpDateFilter || followUpStart) && " | "} {treatmentFilter && `Treatment: ${treatmentFilter}`} {treatmentFilter && (followUpDateFilter || followUpStart) && " | "} {followUpDateFilter && `Follow-up: ${format(followUpDateFilter, 'dd/MM/yyyy')}`} {followUpDateFilter && (followUpStart || followUpEnd) && " | "} {followUpStart && followUpEnd && `Date Range: ${format(followUpStart, 'dd/MM/yyyy')} - ${format(followUpEnd, 'dd/MM/yyyy')}`}
                  </div>
                )}
              </div>
@@ -1019,11 +994,14 @@ export function PatientsTab() {
                  >
                    Clear Search
                  </button>
-                 {(statusFilter || treatmentFilter) && (
+                 {(statusFilter || treatmentFilter || followUpDateFilter || followUpStart || followUpEnd) && (
                    <button
                      onClick={() => {
                        setStatusFilter("");
                        setTreatmentFilter("");
+                       setFollowUpDateFilter(null);
+                       setFollowUpStart(null);
+                       setFollowUpEnd(null);
                      }}
                      className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
                    >
@@ -1035,48 +1013,22 @@ export function PatientsTab() {
            )}
 
            {/* Follow-up date filter results info */}
-           {filterType === "followUpDate" && followUpDateResults && (
+           {filterType === "normal" && (followUpDateFilter || followUpStart || followUpEnd) && (
              <div className="mt-6 text-center">
                <p className="text-green-600 text-sm font-medium">
-                 Found {totalCount} patients with follow-up on {format(followUpDateFilter!, 'dd/MM/yyyy')}
-               </p>
-               <div className="flex justify-center gap-2 mt-2">
-                 <button
-                   onClick={() => setFollowUpDateFilter(null)}
-                   className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
-                 >
-                   Clear Date Filter
-                 </button>
-                 {(statusFilter || treatmentFilter) && (
-                   <button
-                     onClick={() => {
-                       setStatusFilter("");
-                       setTreatmentFilter("");
-                     }}
-                     className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
-                   >
-                     Clear Additional Filters
-                   </button>
-                 )}
-               </div>
-             </div>
-           )}
-
-           {/* Follow-up date range filter results info */}
-           {filterType === "followUpDateRange" && followUpDateRangeResults && (
-             <div className="mt-6 text-center">
-               <p className="text-green-600 text-sm font-medium">
-                 Found {totalCount} patients with follow-up between {followUpStart && format(followUpStart, 'dd/MM/yyyy')} and {followUpEnd && format(followUpEnd, 'dd/MM/yyyy')}
+                 {followUpDateFilter && `Found ${totalCount} patients with follow-up on ${format(followUpDateFilter, 'dd/MM/yyyy')}`}
+                 {followUpStart && followUpEnd && `Found ${totalCount} patients with follow-up between ${format(followUpStart, 'dd/MM/yyyy')} and ${format(followUpEnd, 'dd/MM/yyyy')}`}
                </p>
                <div className="flex justify-center gap-2 mt-2">
                  <button
                    onClick={() => {
+                     setFollowUpDateFilter(null);
                      setFollowUpStart(null);
                      setFollowUpEnd(null);
                    }}
                    className="text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors cursor-pointer"
                  >
-                   Clear Date Range Filter
+                   Clear Date Filters
                  </button>
                  {(statusFilter || treatmentFilter) && (
                    <button

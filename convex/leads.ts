@@ -1150,8 +1150,12 @@ export const getAllPatients = query({
     paginationOpts: paginationOptsValidator,
     statusFilter: v.optional(v.string()),
     treatmentFilter: v.optional(v.string()),
+    followUpStartDate: v.optional(v.string()),
+    followUpEndDate: v.optional(v.string()),
+    followUpDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const startTime = Date.now();
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new Error("Not authenticated");
@@ -1162,13 +1166,38 @@ export const getAllPatients = query({
     if (!userDoc) throw new Error("User not found");
 
     let result;
+    
+    // Determine which index to use based on filters
+    const hasFollowUpFilter = args.followUpDate || args.followUpStartDate || args.followUpEndDate;
+    const hasStatusFilter = args.statusFilter && args.statusFilter !== "";
+    const hasTreatmentFilter = args.treatmentFilter && args.treatmentFilter !== "";
+    
     if (userDoc.role === "admin") {
-      // Admins see all patients except new leads, sold, and treatment_done
-      // Use status index for better performance
-      let query = ctx.db
-        .query("leads")
-        .withIndex("by_status")
-        .filter(q => 
+      let query;
+      
+      if (hasFollowUpFilter) {
+        // Use follow-up date index when follow-up filters are applied
+        if (args.followUpDate) {
+          // Single date filter
+          query = ctx.db
+            .query("leads")
+            .withIndex("by_nextFollowUpDate_and_createdAt")
+            .filter(q => q.eq(q.field("nextFollowUpDate"), args.followUpDate));
+        } else {
+          // Date range filter
+          query = ctx.db
+            .query("leads")
+            .withIndex("by_nextFollowUpDate_and_createdAt")
+            .filter(q => 
+              q.and(
+                q.gte(q.field("nextFollowUpDate"), args.followUpStartDate!),
+                q.lte(q.field("nextFollowUpDate"), args.followUpEndDate!)
+              )
+            );
+        }
+        
+        // Apply additional filters
+        query = query.filter(q => 
           q.and(
             q.neq(q.field("status"), "treatment_done"),
             q.neq(q.field("status"), "new"),
@@ -1176,42 +1205,107 @@ export const getAllPatients = query({
             q.neq(q.field("status"), "sold")
           )
         );
-      
-      // Apply status filter if provided
-      if (args.statusFilter && args.statusFilter !== "") {
-        query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
-      }
-      
-      // Apply treatment filter if provided
-      if (args.treatmentFilter && args.treatmentFilter !== "") {
-        query = query.filter(q => q.eq(q.field("treatmentType"), args.treatmentFilter));
+        
+        if (hasStatusFilter) {
+          query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
+        }
+        
+        if (hasTreatmentFilter) {
+          query = query.filter(q => q.eq(q.field("treatmentType"), args.treatmentFilter));
+        }
+      } else {
+        // Use createdAt index for better performance when no follow-up filters
+        query = ctx.db
+          .query("leads")
+          .withIndex("by_createdAt")
+          .filter(q => 
+            q.and(
+              q.neq(q.field("status"), "treatment_done"),
+              q.neq(q.field("status"), "new"),
+              q.neq(q.field("status"), "new_lead"),
+              q.neq(q.field("status"), "sold")
+            )
+          );
+        
+        if (hasStatusFilter) {
+          query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
+        }
+        
+        if (hasTreatmentFilter) {
+          query = query.filter(q => q.eq(q.field("treatmentType"), args.treatmentFilter));
+        }
       }
       
       result = await query.order("desc").paginate(args.paginationOpts);
     } else if (userDoc.role === "salesperson") {
-      // Salespersons see only their assigned patients except new leads, sold, and treatment_done
-      // Use composite index for better performance
-      let query = ctx.db
-        .query("leads")
-        .withIndex("by_assignedTo_and_status")
-        .filter(q => 
+      let query;
+      
+      if (hasFollowUpFilter) {
+        // Use follow-up date index when follow-up filters are applied
+        if (args.followUpDate) {
+          // Single date filter
+          query = ctx.db
+            .query("leads")
+            .withIndex("by_assignedTo_and_nextFollowUpDate_and_createdAt")
+            .filter(q => 
+              q.and(
+                q.eq(q.field("assignedTo"), userId),
+                q.eq(q.field("nextFollowUpDate"), args.followUpDate)
+              )
+            );
+        } else {
+          // Date range filter
+          query = ctx.db
+            .query("leads")
+            .withIndex("by_assignedTo_and_nextFollowUpDate_and_createdAt")
+            .filter(q => 
+              q.and(
+                q.eq(q.field("assignedTo"), userId),
+                q.gte(q.field("nextFollowUpDate"), args.followUpStartDate!),
+                q.lte(q.field("nextFollowUpDate"), args.followUpEndDate!)
+              )
+            );
+        }
+        
+        // Apply additional filters
+        query = query.filter(q => 
           q.and(
-            q.eq(q.field("assignedTo"), userId),
             q.neq(q.field("status"), "treatment_done"),
             q.neq(q.field("status"), "new"),
             q.neq(q.field("status"), "new_lead"),
             q.neq(q.field("status"), "sold")
           )
         );
-      
-      // Apply status filter if provided
-      if (args.statusFilter && args.statusFilter !== "") {
-        query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
-      }
-      
-      // Apply treatment filter if provided
-      if (args.treatmentFilter && args.treatmentFilter !== "") {
-        query = query.filter(q => q.eq(q.field("treatmentType"), args.treatmentFilter));
+        
+        if (hasStatusFilter) {
+          query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
+        }
+        
+        if (hasTreatmentFilter) {
+          query = query.filter(q => q.eq(q.field("treatmentType"), args.treatmentFilter));
+        }
+      } else {
+        // Use assignedTo and createdAt index for better performance when no follow-up filters
+        query = ctx.db
+          .query("leads")
+          .withIndex("by_assignedTo_and_createdAt")
+          .filter(q => 
+            q.and(
+              q.eq(q.field("assignedTo"), userId),
+              q.neq(q.field("status"), "treatment_done"),
+              q.neq(q.field("status"), "new"),
+              q.neq(q.field("status"), "new_lead"),
+              q.neq(q.field("status"), "sold")
+            )
+          );
+        
+        if (hasStatusFilter) {
+          query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
+        }
+        
+        if (hasTreatmentFilter) {
+          query = query.filter(q => q.eq(q.field("treatmentType"), args.treatmentFilter));
+        }
       }
       
       result = await query.order("desc").paginate(args.paginationOpts);

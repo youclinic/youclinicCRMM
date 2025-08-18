@@ -59,7 +59,19 @@ const applicationTables = {
     .index("by_assignedTo_and_status", ["assignedTo", "status"])
     .index("by_status_and_createdAt", ["status", "createdAt"])
     .index("by_assignedTo_and_status_and_createdAt", ["assignedTo", "status", "createdAt"])
-    .index("by_phone", ["phone"]),
+    .index("by_phone", ["phone"])
+    // New indexes for better filtering and sorting
+    .index("by_assignedTo_and_createdAt", ["assignedTo", "createdAt"])
+    .index("by_status_and_treatmentType", ["status", "treatmentType"])
+    .index("by_assignedTo_and_status_and_treatmentType", ["assignedTo", "status", "treatmentType"])
+    .index("by_nextFollowUpDate_and_status", ["nextFollowUpDate", "status"])
+    .index("by_assignedTo_and_nextFollowUpDate_and_status", ["assignedTo", "nextFollowUpDate", "status"])
+    .index("by_nextFollowUpDate_and_treatmentType", ["nextFollowUpDate", "treatmentType"])
+    .index("by_assignedTo_and_nextFollowUpDate_and_treatmentType", ["assignedTo", "nextFollowUpDate", "treatmentType"])
+    .index("by_nextFollowUpDate_and_status_and_treatmentType", ["nextFollowUpDate", "status", "treatmentType"])
+    .index("by_assignedTo_and_nextFollowUpDate_and_status_and_treatmentType", ["assignedTo", "nextFollowUpDate", "status", "treatmentType"])
+    .index("by_nextFollowUpDate_and_createdAt", ["nextFollowUpDate", "createdAt"])
+    .index("by_assignedTo_and_nextFollowUpDate_and_createdAt", ["assignedTo", "nextFollowUpDate", "createdAt"]),
   users: defineTable({
     name: v.optional(v.string()),
     email: v.optional(v.string()),
