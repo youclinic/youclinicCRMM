@@ -4,6 +4,7 @@ import { Anonymous } from "@convex-dev/auth/providers/Anonymous";
 import { query, action } from "./_generated/server";
 import { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { getTurkeyISOString } from "./utils";
 
 const passwordProvider = Password({
   profile(params) {
@@ -25,13 +26,13 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         // Log login for existing user
         const user = await ctx.db.get(args.existingUserId);
         if (user) {
-          await ctx.db.insert("logs", {
-            type: "login",
-            userId: args.existingUserId,
-            userName: user.name || user.email || "",
-            timestamp: new Date().toISOString(),
-            details: {},
-          });
+                  await ctx.db.insert("logs", {
+          type: "login",
+          userId: args.existingUserId,
+          userName: user.name || user.email || "",
+          timestamp: getTurkeyISOString(),
+          details: {},
+        });
         }
         return args.existingUserId;
       }
@@ -63,13 +64,13 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       // Patch the user to set authId to the userId
       await ctx.db.patch(userId, { authId: userId });
       // Log login for new user
-      await ctx.db.insert("logs", {
-        type: "login",
-        userId,
-        userName: name,
-        timestamp: new Date().toISOString(),
-        details: {},
-      });
+              await ctx.db.insert("logs", {
+          type: "login",
+          userId,
+          userName: name,
+          timestamp: getTurkeyISOString(),
+          details: {},
+        });
       console.log("Created user with ID and set authId:", userId);
       return userId;
     },

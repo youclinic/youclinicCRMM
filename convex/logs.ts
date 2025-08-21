@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { paginationOptsValidator } from "convex/server";
+import { getTurkeyISOString } from "./utils";
 
 export const listAllLogs = query({
   args: { 
@@ -26,7 +27,7 @@ export const logLogin = mutation({
       type: "login",
       userId,
       userName: user.name || user.email || "",
-      timestamp: new Date().toISOString(),
+      timestamp: getTurkeyISOString(),
       details: {},
     });
     return { success: true };
@@ -44,7 +45,7 @@ export const logTabVisit = mutation({
       type: "tab_visit",
       userId,
       userName: user.name || user.email || "",
-      timestamp: new Date().toISOString(),
+      timestamp: getTurkeyISOString(),
       details: { tab: args.tab },
     });
     return { success: true };

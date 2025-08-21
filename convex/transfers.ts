@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { paginationOptsValidator } from "convex/server";
+import { getTurkeyTimestamp } from "./utils";
 
 // Hasta arama fonksiyonu
 export const searchPatients = query({
@@ -145,7 +146,7 @@ export const createTransferRequest = mutation({
       throw new Error("A pending transfer request already exists for this patient");
     }
 
-    const now = Date.now();
+    const now = getTurkeyTimestamp();
     const transferId = await ctx.db.insert("patientTransfers", {
       patientId: args.patientId,
       fromUserId: userId,

@@ -5,7 +5,7 @@ import React from "react";
 
 export function LogTab() {
   const [paginationOpts, setPaginationOpts] = useState({
-    numItems: 50,
+    numItems: 100,
     cursor: null as string | null,
   });
 

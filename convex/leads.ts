@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { paginationOptsValidator } from "convex/server";
+import { getTurkeyTimestamp, getTurkeyISOString, getTurkeyTomorrowString, getTurkeyDateString } from "./utils";
 
 export const list = query({
   args: { 
@@ -296,8 +297,8 @@ export const create = mutation({
       assignedTo: userId,
       salesPerson: currentUser.name || currentUser.email, // Use name if available, otherwise email
       files: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: getTurkeyTimestamp(),
+      updatedAt: getTurkeyTimestamp(),
     });
   },
 });
@@ -361,9 +362,7 @@ export const update = mutation({
       
       // If status is being set to "on_follow_up", automatically set nextFollowUpDate to tomorrow
       if (updates.status === "on_follow_up") {
-        const today = new Date();
-        const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000); // Add 24 hours in milliseconds
-        updates.nextFollowUpDate = tomorrow.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        updates.nextFollowUpDate = getTurkeyTomorrowString(); // Format as YYYY-MM-DD
       }
     }
     
@@ -374,7 +373,7 @@ export const update = mutation({
         type: "status_update",
         userId,
         userName: user.name || user.email || "",
-        timestamp: new Date().toISOString(),
+        timestamp: getTurkeyISOString(),
         details: {
           patientId: id,
           patientName: (lead?.firstName || "") + (lead?.lastName ? (" " + lead.lastName) : ""),
@@ -939,7 +938,7 @@ export const createProformaInvoice = mutation({
       patientId: args.patientId,
       createdBy: userId,
       invoiceNumber,
-      invoiceDate: today.toISOString().slice(0, 10),
+      invoiceDate: getTurkeyDateString(),
       items: args.items,
       total,
       deposit: args.deposit,
@@ -947,8 +946,8 @@ export const createProformaInvoice = mutation({
       currency: args.currency || "USD", // Default to USD if not provided
       salespersonPhone: args.salespersonPhone,
       notes: args.notes,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: getTurkeyTimestamp(),
+      updatedAt: getTurkeyTimestamp(),
     });
   },
 });
@@ -1015,7 +1014,7 @@ export const updateProformaInvoice = mutation({
       currency: args.currency,
       salespersonPhone: args.salespersonPhone,
       notes: args.notes,
-      updatedAt: Date.now(),
+      updatedAt: getTurkeyTimestamp(),
     });
   },
 });
@@ -1342,7 +1341,11 @@ export const getAllPatients = query({
 // Get all leads for marketing analysis (including new leads)
 export const getAllLeadsForMarketing = query({
   args: { 
-    paginationOpts: paginationOptsValidator 
+    paginationOpts: paginationOptsValidator,
+    adNameFilter: v.optional(v.string()),
+    statusFilter: v.optional(v.string()),
+    dateFromFilter: v.optional(v.string()),
+    dateToFilter: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -1357,17 +1360,34 @@ export const getAllLeadsForMarketing = query({
     let result;
     if (userDoc.role === "admin") {
       // Admins see all leads except treatment_done
-      // Use status index for better performance
-      result = await ctx.db
+      let query = ctx.db
         .query("leads")
         .withIndex("by_status")
-        .filter(q => q.neq(q.field("status"), "treatment_done"))
-        .order("desc")
-        .paginate(args.paginationOpts);
+        .filter(q => q.neq(q.field("status"), "treatment_done"));
+      
+      // Apply filters
+      if (args.adNameFilter && args.adNameFilter.trim() !== "") {
+        query = query.filter(q => q.eq(q.field("adName"), args.adNameFilter));
+      }
+      
+      if (args.statusFilter && args.statusFilter.trim() !== "") {
+        query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
+      }
+      
+      if (args.dateFromFilter) {
+        const fromTimestamp = new Date(args.dateFromFilter).getTime();
+        query = query.filter(q => q.gte(q.field("createdAt"), fromTimestamp));
+      }
+      
+      if (args.dateToFilter) {
+        const toTimestamp = new Date(args.dateToFilter).getTime() + 24 * 60 * 60 * 1000; // Add 24 hours to include the entire day
+        query = query.filter(q => q.lte(q.field("createdAt"), toTimestamp));
+      }
+      
+      result = await query.order("desc").paginate(args.paginationOpts);
     } else if (userDoc.role === "salesperson") {
       // Salespersons see only their assigned leads except treatment_done
-      // Use composite index for better performance
-      result = await ctx.db
+      let query = ctx.db
         .query("leads")
         .withIndex("by_assignedTo_and_status")
         .filter(q => 
@@ -1375,9 +1395,28 @@ export const getAllLeadsForMarketing = query({
             q.eq(q.field("assignedTo"), userId),
             q.neq(q.field("status"), "treatment_done")
           )
-        )
-        .order("desc")
-        .paginate(args.paginationOpts);
+        );
+      
+      // Apply filters
+      if (args.adNameFilter && args.adNameFilter.trim() !== "") {
+        query = query.filter(q => q.eq(q.field("adName"), args.adNameFilter));
+      }
+      
+      if (args.statusFilter && args.statusFilter.trim() !== "") {
+        query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
+      }
+      
+      if (args.dateFromFilter) {
+        const fromTimestamp = new Date(args.dateFromFilter).getTime();
+        query = query.filter(q => q.gte(q.field("createdAt"), fromTimestamp));
+      }
+      
+      if (args.dateToFilter) {
+        const toTimestamp = new Date(args.dateToFilter).getTime() + 24 * 60 * 60 * 1000; // Add 24 hours to include the entire day
+        query = query.filter(q => q.lte(q.field("createdAt"), toTimestamp));
+      }
+      
+      result = await query.order("desc").paginate(args.paginationOpts);
     } else {
       throw new Error("Invalid user role");
     }
@@ -1402,5 +1441,162 @@ export const getAllLeadsForMarketing = query({
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     };
+  },
+});
+
+// Get all ad names for marketing analysis
+export const getAdNamesForMarketing = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Fetch user document to check role
+    const userDoc = await ctx.db.get(userId);
+    if (!userDoc) throw new Error("User not found");
+
+    let leads;
+    if (userDoc.role === "admin") {
+      // Admins see all leads except treatment_done
+      leads = await ctx.db
+        .query("leads")
+        .withIndex("by_status")
+        .filter(q => q.neq(q.field("status"), "treatment_done"))
+        .collect();
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons see only their assigned leads except treatment_done
+      leads = await ctx.db
+        .query("leads")
+        .withIndex("by_assignedTo_and_status")
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.neq(q.field("status"), "treatment_done")
+          )
+        )
+        .collect();
+    } else {
+      throw new Error("Invalid user role");
+    }
+
+    // Extract unique ad names
+    const adNames = new Set<string>();
+    leads.forEach(lead => {
+      if (lead.adName && lead.adName.trim() !== "") {
+        adNames.add(lead.adName);
+      }
+    });
+
+    return Array.from(adNames).sort();
+  },
+});
+
+// Get marketing statistics for all leads (not just current page)
+export const getMarketingStats = query({
+  args: {
+    adNameFilter: v.optional(v.string()),
+    statusFilter: v.optional(v.string()),
+    dateFromFilter: v.optional(v.string()),
+    dateToFilter: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Fetch user document to check role
+    const userDoc = await ctx.db.get(userId);
+    if (!userDoc) throw new Error("User not found");
+
+    let leads;
+    if (userDoc.role === "admin") {
+      // Admins see all leads except treatment_done
+      let query = ctx.db
+        .query("leads")
+        .withIndex("by_status")
+        .filter(q => q.neq(q.field("status"), "treatment_done"));
+      
+      // Apply filters
+      if (args.adNameFilter && args.adNameFilter.trim() !== "") {
+        query = query.filter(q => q.eq(q.field("adName"), args.adNameFilter));
+      }
+      
+      if (args.statusFilter && args.statusFilter.trim() !== "") {
+        query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
+      }
+      
+      if (args.dateFromFilter) {
+        const fromTimestamp = new Date(args.dateFromFilter).getTime();
+        query = query.filter(q => q.gte(q.field("createdAt"), fromTimestamp));
+      }
+      
+      if (args.dateToFilter) {
+        const toTimestamp = new Date(args.dateToFilter).getTime() + 24 * 60 * 60 * 1000; // Add 24 hours to include the entire day
+        query = query.filter(q => q.lte(q.field("createdAt"), toTimestamp));
+      }
+      
+      leads = await query.collect();
+    } else if (userDoc.role === "salesperson") {
+      // Salespersons see only their assigned leads except treatment_done
+      let query = ctx.db
+        .query("leads")
+        .withIndex("by_assignedTo_and_status")
+        .filter(q => 
+          q.and(
+            q.eq(q.field("assignedTo"), userId),
+            q.neq(q.field("status"), "treatment_done")
+          )
+        );
+      
+      // Apply filters
+      if (args.adNameFilter && args.adNameFilter.trim() !== "") {
+        query = query.filter(q => q.eq(q.field("adName"), args.adNameFilter));
+      }
+      
+      if (args.statusFilter && args.statusFilter.trim() !== "") {
+        query = query.filter(q => q.eq(q.field("status"), args.statusFilter));
+      }
+      
+      if (args.dateFromFilter) {
+        const fromTimestamp = new Date(args.dateFromFilter).getTime();
+        query = query.filter(q => q.gte(q.field("createdAt"), fromTimestamp));
+      }
+      
+      if (args.dateToFilter) {
+        const toTimestamp = new Date(args.dateToFilter).getTime() + 24 * 60 * 60 * 1000; // Add 24 hours to include the entire day
+        query = query.filter(q => q.lte(q.field("createdAt"), toTimestamp));
+      }
+      
+      leads = await query.collect();
+    } else {
+      throw new Error("Invalid user role");
+    }
+
+    // Calculate statistics
+    const total = leads.length;
+    const byStatus: Record<string, number> = {
+      new_lead: 0,
+      no_whatsapp: 0,
+      on_follow_up: 0,
+      live: 0,
+      passive_live: 0,
+      cold: 0,
+      hot: 0,
+      dead: 0,
+      no_communication: 0,
+      no_interest: 0,
+      sold: 0,
+    };
+
+    leads.forEach(lead => {
+      if (lead.status && byStatus.hasOwnProperty(lead.status)) {
+        byStatus[lead.status]++;
+      }
+    });
+
+    return { total, byStatus };
   },
 });

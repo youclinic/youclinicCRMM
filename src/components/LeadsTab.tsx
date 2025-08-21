@@ -81,6 +81,7 @@ export function LeadsTab() {
     "Advertisement",
     "Email Campaign",
     "Phone Call",
+    "WhatsApp",
     "Other"
   ];
 

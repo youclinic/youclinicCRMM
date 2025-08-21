@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { paginationOptsValidator } from "convex/server";
+import { getTurkeyTimestamp, getTurkeyDateString } from "./utils";
 
 // Kullanıcının etkinliklerini listele
 export const list = query({
@@ -70,7 +71,7 @@ export const getToday = query({
       throw new Error("Not authenticated");
     }
 
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD formatında
+    const today = getTurkeyDateString(); // YYYY-MM-DD formatında
 
     return await ctx.db
       .query("calendarEvents")
@@ -130,7 +131,7 @@ export const create = mutation({
       throw new Error("Not authenticated");
     }
 
-    const now = Date.now();
+    const now = getTurkeyTimestamp();
 
     return await ctx.db.insert("calendarEvents", {
       userId,
@@ -173,7 +174,7 @@ export const update = mutation({
 
     return await ctx.db.patch(id, {
       ...updates,
-      updatedAt: Date.now(),
+      updatedAt: getTurkeyTimestamp(),
     });
   },
 });
@@ -198,7 +199,7 @@ export const markCompleted = mutation({
 
     return await ctx.db.patch(args.id, {
       isCompleted: args.isCompleted,
-      updatedAt: Date.now(),
+      updatedAt: getTurkeyTimestamp(),
     });
   },
 });
@@ -257,7 +258,7 @@ export const getStats = query({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTurkeyDateString();
     const todayEvents = allEvents.filter(event => event.eventDate === today);
     const pendingEvents = allEvents.filter(event => !event.isCompleted);
     const completedEvents = allEvents.filter(event => event.isCompleted);

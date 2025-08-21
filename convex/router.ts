@@ -2,6 +2,7 @@ import { httpRouter } from "convex/server";
 import { httpAction, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { getTurkeyTimestamp } from "./utils";
 
 const http = httpRouter();
 
@@ -55,8 +56,8 @@ export const importLead = internalMutation({
       assignedTo: args.assignedTo,
       status: "new",
       files: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: getTurkeyTimestamp(),
+      updatedAt: getTurkeyTimestamp(),
     });
     return null;
   },

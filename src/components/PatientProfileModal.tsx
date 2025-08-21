@@ -32,8 +32,7 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
   const [showProformaModal, setShowProformaModal] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
-  const [showFileViewerModal, setShowFileViewerModal] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<any>(null);
+
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [proformaForm, setProformaForm] = useState({
     items: [{ description: "", amount: 0 }],
@@ -81,6 +80,19 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
     "Ovarian Rejuvenation",
     "Erectile Dysfunction"
   ];
+
+  const sourceOptions = [
+    "Website",
+    "Referral",
+    "Social Media",
+    "Advertisement",
+    "Email Campaign",
+    "Phone Call",
+    "WhatsApp",
+    "Other"
+  ];
+
+  const currencyOptions = ["USD", "EUR", "GBP", "TRY"];
   const [editingTreatmentType, setEditingTreatmentType] = useState(false);
   const [treatmentTypeValue, setTreatmentTypeValue] = useState("");
   useEffect(() => {
@@ -130,7 +142,6 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
     currency: "",
     preferredDate: "",
     status: "",
-    notes: "",
     arrivalDate: "",
   });
   useEffect(() => {
@@ -148,7 +159,6 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
         currency: patient.currency || "",
         preferredDate: patient.preferredDate || "",
         status: patient.status || "",
-        notes: patient.notes || "",
         arrivalDate: patient.arrivalDate || "",
       });
     }
@@ -288,10 +298,7 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
     }
   };
 
-  const handleViewFile = (file: any) => {
-    setSelectedFile(file);
-    setShowFileViewerModal(true);
-  };
+
 
   const handleDownloadProforma = async (invoiceId: Id<"proformaInvoices">) => {
     const invoice = proformaInvoices?.find(inv => inv._id === invoiceId);
@@ -322,6 +329,8 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
   };
 
   const FileItem = ({ file, onRemove }: { file: any; onRemove: () => void }) => {
+    const fileUrl = useQuery(api.leads.getFileUrl, file.fileId ? { fileId: file.fileId } : "skip");
+    
     const canViewFiles = () => {
       if (!currentUser) return false;
       if (currentUser.role === "admin") return true;
@@ -359,13 +368,15 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          {canViewFiles() && (
-            <button
-              onClick={() => handleViewFile(file)}
+          {canViewFiles() && fileUrl && (
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               className="px-3 py-1 text-blue-600 hover:text-blue-800 text-sm font-medium"
             >
               View
-            </button>
+            </a>
           )}
           <button
             onClick={onRemove}
@@ -491,12 +502,16 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
                     {sensitiveInfoVisible && (
                       <div>
                         <label className="text-sm font-medium text-gray-600">Source</label>
-                        <input
-                          type="text"
+                        <select
                           value={editValues.source}
                           onChange={e => setEditValues(v => ({ ...v, source: e.target.value }))}
                           className="w-full px-2 py-1 border rounded"
-                        />
+                        >
+                          <option value="">Select Source</option>
+                          {sourceOptions.map(option => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </select>
                       </div>
                     )}
                     <div>
@@ -510,12 +525,16 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Currency</label>
-                      <input
-                        type="text"
+                      <select
                         value={editValues.currency}
                         onChange={e => setEditValues(v => ({ ...v, currency: e.target.value }))}
                         className="w-full px-2 py-1 border rounded"
-                      />
+                      >
+                        <option value="">Select Currency</option>
+                        {currencyOptions.map(option => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Preferred Date</label>
@@ -540,16 +559,7 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
                         </select>
                       </div>
                     )}
-                    {sensitiveInfoVisible && (
-                      <div>
-                        <label className="text-sm font-medium text-gray-600">Notes</label>
-                        <textarea
-                          value={editValues.notes}
-                          onChange={e => setEditValues(v => ({ ...v, notes: e.target.value }))}
-                          className="w-full px-2 py-1 border rounded"
-                        />
-                      </div>
-                    )}
+
                     {sensitiveInfoVisible && (
                       <div>
                         <label className="text-sm font-medium text-gray-600">Ad Name</label>
@@ -599,7 +609,6 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
                               currency: patient.currency || "",
                               preferredDate: patient.preferredDate || "",
                               status: patient.status || "",
-                              notes: patient.notes || "",
                               arrivalDate: patient.arrivalDate || "",
                             });
                           }}
@@ -1260,78 +1269,7 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
         />
       )}
 
-      {/* File Viewer Modal */}
-      {showFileViewerModal && selectedFile && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">File Viewer: {selectedFile.fileName}</h3>
-              <button
-                onClick={() => setShowFileViewerModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                <span className="text-2xl">
-                  {selectedFile.fileType.includes('image') ? '🖼️' : 
-                   selectedFile.fileType.includes('pdf') ? '📄' : 
-                   selectedFile.fileType.includes('word') ? '📝' : 
-                   selectedFile.fileType.includes('excel') ? '📊' : '📎'}
-                </span>
-                <div>
-                  <div className="font-medium">{selectedFile.fileName}</div>
-                  <div className="text-sm text-gray-500">
-                    Type: {selectedFile.fileType} | 
-                    Uploaded: {new Date(selectedFile.uploadedAt).toLocaleDateString('tr-TR')}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="border rounded-lg p-4">
-                {selectedFile.fileType.includes('image') ? (
-                  <img 
-                    src={`/api/files/${selectedFile.fileId}`} 
-                    alt={selectedFile.fileName}
-                    className="max-w-full h-auto"
-                    onError={(e) => {
-                      const target = e.currentTarget as HTMLImageElement;
-                      target.style.display = 'none';
-                      const nextElement = target.nextElementSibling as HTMLElement;
-                      if (nextElement) {
-                        nextElement.style.display = 'block';
-                      }
-                    }}
-                  />
-                ) : selectedFile.fileType.includes('pdf') ? (
-                  <iframe 
-                    src={`/api/files/${selectedFile.fileId}`}
-                    className="w-full h-96 border-0"
-                    title={selectedFile.fileName}
-                  />
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 mb-4">
-                      This file type cannot be previewed directly.
-                    </p>
-                    <a
-                      href={`/api/files/${selectedFile.fileId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                    >
-                      Download to View
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 } 
