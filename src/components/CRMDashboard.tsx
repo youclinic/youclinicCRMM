@@ -14,13 +14,19 @@ import { LogTab } from "./LogTab";
 import { TransfersTab } from "./TransfersTab";
 import { CalendarTab } from "./CalendarTab";
 import { ProfileTab } from "./ProfileTab";
+import { useUser } from "../contexts/UserContext";
+import { useDebounce } from "../hooks/useDebounce";
 
 type Tab = "dashboard" | "leads" | "patients" | "solds" | "aftercare" | "admin" | "marketing" | "log" | "transfers" | "calendar" | "profile";
 
 export function CRMDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
-  const loggedInUser = useQuery(api.auth.loggedInUser);
-  const newLeadsCount = useQuery(api.leads.getNewLeadsCount);
+  const { user: loggedInUser } = useUser();
+  // Only fetch new leads count when dashboard is active
+  const newLeadsCount = useQuery(
+    api.leads.getNewLeadsCount, 
+    activeTab === "dashboard" ? {} : "skip"
+  );
   const logLogin = useMutation(api.logs.logLogin);
   const logTabVisit = useMutation(api.logs.logTabVisit);
   const loginLoggedRef = useRef(false);
@@ -63,7 +69,10 @@ export function CRMDashboard() {
   const [search, setSearch] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [selectedPatientId, setSelectedPatientId] = useState<Id<"leads"> | null>(null);
-  const searchResults = useQuery(api.leads.globalSearchLeads, search.trim() ? { query: search } : "skip");
+  
+  // Debounce search to reduce API calls
+  const debouncedSearch = useDebounce(search, 500); // 500ms delay
+  const searchResults = useQuery(api.leads.globalSearchLeads, debouncedSearch.trim() ? { query: debouncedSearch } : "skip");
 
   return (
     <div className="flex h-screen bg-gray-50">

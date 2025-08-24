@@ -4,29 +4,32 @@ import { SignInForm } from "./SignInForm";
 import { SignOutButton } from "./SignOutButton";
 import { Toaster } from "sonner";
 import { CRMDashboard } from "./components/CRMDashboard";
+import { UserProvider, useUser } from "./contexts/UserContext";
 
 export default function App() {
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-sm h-16 flex justify-between items-center border-b shadow-sm px-4">
-        <img src="/logo.png" alt="Logo" className="w-16 h-16 object-contain" />
-        <h2 className="text-xl font-semibold text-blue-600">YouClinic CRM</h2>
-        <Authenticated>
-          <SignOutButton />
-        </Authenticated>
-      </header>
-      <main className="flex-1">
-        <Content />
-      </main>
-      <Toaster />
-    </div>
+    <UserProvider>
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-sm h-16 flex justify-between items-center border-b shadow-sm px-4">
+          <img src="/logo.png" alt="Logo" className="w-16 h-16 object-contain" />
+          <h2 className="text-xl font-semibold text-blue-600">YouClinic CRM</h2>
+          <Authenticated>
+            <SignOutButton />
+          </Authenticated>
+        </header>
+        <main className="flex-1">
+          <Content />
+        </main>
+        <Toaster />
+      </div>
+    </UserProvider>
   );
 }
 
 function Content() {
-  const loggedInUser = useQuery(api.auth.loggedInUser);
+  const { user: loggedInUser, isLoading } = useUser();
 
-  if (loggedInUser === undefined) {
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center h-96">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

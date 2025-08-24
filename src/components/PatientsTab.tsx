@@ -9,6 +9,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { tr } from "date-fns/locale";
 import { format, parse, isValid, isAfter, isBefore } from "date-fns";
 import React from "react";
+import { useUser } from "../contexts/UserContext";
 
 export function PatientsTab() {
   const [paginationOpts, setPaginationOpts] = useState({
@@ -42,7 +43,7 @@ export function PatientsTab() {
     followUpStartDate,
     followUpEndDate,
   });
-  const currentUser = useQuery(api.auth.loggedInUser);
+  const { user: currentUser } = useUser();
   const updateLead = useMutation(api.leads.update);
   const deleteLead = useMutation(api.leads.remove);
   const generateUploadUrl = useMutation(api.leads.generateUploadUrl);

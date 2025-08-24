@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
+import { useUser } from "../contexts/UserContext";
 
 export function AdminTab() {
-  const currentUser = useQuery(api.auth.loggedInUser);
+  const { user: currentUser } = useUser();
   const allUsers = useQuery(api.users.getAllUsers);
   const createSalespersonAccounts = useMutation(api.users.createSalespersonAccounts);
   const updateUserRole = useMutation(api.users.updateUserRole);

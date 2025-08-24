@@ -5,6 +5,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { toast } from "sonner";
 import { PatientProfileModal } from "./PatientProfileModal";
 import React from "react"; // Added missing import
+import { useUser } from "../contexts/UserContext";
 
 export function LeadsTab() {
   const [paginationOpts, setPaginationOpts] = useState({
@@ -17,7 +18,7 @@ export function LeadsTab() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const leadsResult = useQuery(api.leads.list, { paginationOpts });
-  const currentUser = useQuery(api.auth.loggedInUser);
+  const { user: currentUser } = useUser();
   const createLead = useMutation(api.leads.create);
   const updateLead = useMutation(api.leads.update);
   const deleteLead = useMutation(api.leads.remove);

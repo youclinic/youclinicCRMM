@@ -4,6 +4,7 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { toast } from "sonner";
 import { PatientProfileModal } from "./PatientProfileModal";
+import { useUser } from "../contexts/UserContext";
 
 export function SoldsTab() {
   // Pagination state for converted patients
@@ -20,7 +21,7 @@ export function SoldsTab() {
   ] : [];
   
   const upcomingPatients = useQuery(api.leads.getUpcomingPatients);
-  const currentUser = useQuery(api.auth.loggedInUser);
+  const { user: currentUser } = useUser();
   const monthlyRevenue = useQuery(
     api.leads.getMonthlyRevenue,
     currentUser?.role === "admin" ? {} : "skip"

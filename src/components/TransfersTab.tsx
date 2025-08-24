@@ -3,6 +3,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import React from "react";
+import { useUser } from "../contexts/UserContext";
+import { useDebounce } from "../hooks/useDebounce";
 
 export function TransfersTab() {
   const [activeSection, setActiveSection] = useState<"create" | "requests" | "history">("create");
@@ -27,14 +29,17 @@ export function TransfersTab() {
   const [allTransferRequests, setAllTransferRequests] = useState<any[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const loggedInUser = useQuery(api.auth.loggedInUser);
+  const { user: loggedInUser } = useUser();
   const isAdmin = loggedInUser?.role === "admin";
 
+  // Debounce search to reduce API calls
+  const debouncedSearchQuery = useDebounce(searchQuery, 500); // 500ms delay
+  
   // Queries
   const searchResults = useQuery(
     api.transfers.searchPatients,
-    searchQuery.trim() ? { 
-      query: searchQuery, 
+    debouncedSearchQuery.trim() ? { 
+      query: debouncedSearchQuery, 
       transferType,
       paginationOpts: { numItems: 10, cursor: null }
     } : "skip"

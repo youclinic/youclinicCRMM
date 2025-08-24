@@ -5,6 +5,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { toast } from "sonner";
 import { Plus, Trash2, FileText, Download } from "lucide-react";
 import { ProformaPDF } from "./ProformaPDF";
+import { useUser } from "../contexts/UserContext";
 
 interface PatientProfileModalProps {
   patientId: Id<"leads"> | null;
@@ -13,7 +14,7 @@ interface PatientProfileModalProps {
 
 export function PatientProfileModal({ patientId, onClose }: PatientProfileModalProps) {
   const patient = useQuery(api.leads.getById, patientId ? { id: patientId } : "skip");
-  const currentUser = useQuery(api.auth.loggedInUser);
+  const { user: currentUser } = useUser();
   const proformaInvoices = useQuery(api.leads.getProformaInvoices, patientId ? { patientId } : "skip");
   const updateLead = useMutation(api.leads.update);
   const generateUploadUrl = useMutation(api.leads.generateUploadUrl);
