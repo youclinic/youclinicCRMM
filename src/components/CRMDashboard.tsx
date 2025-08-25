@@ -22,11 +22,8 @@ type Tab = "dashboard" | "leads" | "patients" | "solds" | "aftercare" | "admin" 
 export function CRMDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const { user: loggedInUser } = useUser();
-  // Only fetch new leads count when dashboard is active
-  const newLeadsCount = useQuery(
-    api.leads.getNewLeadsCount, 
-    activeTab === "dashboard" ? {} : "skip"
-  );
+  // Always fetch new leads count to show notification badge
+  const newLeadsCount = useQuery(api.leads.getNewLeadsCount);
   const logLogin = useMutation(api.logs.logLogin);
   const logTabVisit = useMutation(api.logs.logTabVisit);
   const loginLoggedRef = useRef(false);
